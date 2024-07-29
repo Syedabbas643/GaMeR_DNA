@@ -1,0 +1,6 @@
+﻿<DnaLibrary Name="GaMeR Add-In" RuntimeVersion="v4.0">
+  <ExternalLibrary Path="GaMeR.dll" LoadFromBytes="true" Pack="true" />
+
+  <Reference Path="ExcelDna.IntelliSense.dll" Pack="true" />
+
+</DnaLibrary>
