@@ -11,13 +11,14 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using static GaMeR.Formfind;
+using System.Runtime.InteropServices;
 
 namespace GaMeR
 {
     public partial class Form1 : Form
     {
         private List<TabPage> _hiddenTabs;
-        Formfind formfind;
+        
         public Form1()
         {
             InitializeComponent();
@@ -94,11 +95,11 @@ namespace GaMeR
             Excel.Workbook templateWorkbook = null;
             Excel.Workbook newWorkbook = null;
             Excel.Worksheet costingSheet = null;
-            Excel.Worksheet priceSheet = null;
+            Excel.Worksheet titleSheet = null;
             try
             {
-                string projectname = projectnamebox.Text.ToString();
-                string customername = customernamebox.Text.ToString();
+                string projectname = projectnamebox.Text.ToString().ToUpper();
+                string customername = customernamebox.Text.ToString().ToUpper();
 
                 string paneltype = "";
                 string panelmodel = "";
@@ -147,7 +148,7 @@ namespace GaMeR
                         }
                         else 
                         {
-                            panelNames.Add(textBox.Text);
+                            panelNames.Add(textBox.Text.ToUpper());
                         }
                     }
                 }
@@ -186,21 +187,54 @@ namespace GaMeR
 
                 // Set the title of the new workbook window
                 newWorkbook.Windows[1].Caption = projectname;
+                newWorkbook.Application.DisplayAlerts = false;
+                newWorkbook.Activate();
 
                 foreach (Excel.Worksheet sheet in newWorkbook.Sheets)
                 {
-                    if (sheet.Name.Equals("COSTING", StringComparison.OrdinalIgnoreCase))
+                    if (sheet.Name.Equals("ANALYSE", StringComparison.OrdinalIgnoreCase))
+                    {
+                        sheet.Delete();
+                    }
+                    else if (sheet.Name.Equals("BOM", StringComparison.OrdinalIgnoreCase))
+                    {
+                        sheet.Delete();
+                    }
+                    else if (sheet.Name.Equals("COSTING", StringComparison.OrdinalIgnoreCase))
                     {
                         costingSheet = sheet;
-                        break;
+                    }
+                    else if (sheet.Name.Equals("TITLE", StringComparison.OrdinalIgnoreCase))
+                    {
+                        titleSheet = sheet;
                     }
                 }
+                int startRowPrice = 10;
+                int slno = 1;
+                foreach (var panelName in panelNames)
+                {
+                    Excel.Range row9 = titleSheet.Rows[startRowPrice]; // Row 9 because Excel is 1-based
+                    row9.Insert(Excel.XlInsertShiftDirection.xlShiftDown, false);
+
+                    Excel.Range newRow = titleSheet.Rows[startRowPrice]; // New row inserted at the same index
+                    newRow.Cells[1, 1].Value2 = slno.ToString();
+                    newRow.Cells[1, 2].Value2 = panelName;
+                    newRow.Cells[1, 8].Value2 = "1";
+
+                    startRowPrice++;
+                    slno++;
+                }
+                titleSheet.Cells[5, 1].Value2 = $"PROJECT: {projectname}";
+                titleSheet.Cells[6, 1].Value2 = $"CUSTOMER: {customername}";
+                titleSheet.Rows[9].Delete();
+                titleSheet.Rows[startRowPrice - 1].Delete();
 
                 int startRow = 54;
                 foreach (var panelName in panelNames)
                 {
                     Excel.Range cell = costingSheet.Cells[startRow, 2]; // Column B is index 2
                     cell.Value2 = panelName;
+                    cell.Offset[0, -1].Value2 = "AL";
                     cell.Font.Bold = true; // Make the text bold
                     cell.Interior.Color = 15773696;
 
@@ -214,13 +248,24 @@ namespace GaMeR
                     ApplyBorders(cell);
                     ApplyBorders(cellright);
 
+                    Excel.Range cellBelow2 = costingSheet.Cells[startRow + 1, 2];
+                    cellBelow2.Interior.Color = 49407; // Orange color
 
-                    Excel.Range cellBelow3 = costingSheet.Cells[startRow + 1, 2];
+                    Excel.Range cellright2 = costingSheet.Cells[startRow + 1, 3]; // Column B is index 2
+                    cellright2.Value2 = "1";
+                    cellright2.Font.Bold = true; // Make the text bold
+                    cellright2.Interior.Color = 49407;
+                    cellright2.HorizontalAlignment = Excel.XlHAlign.xlHAlignCenter;
+
+                    ApplyBorders(cellBelow2);
+                    ApplyBorders(cellright2);
+
+                    Excel.Range cellBelow3 = costingSheet.Cells[startRow + 2, 2];
                     cellBelow3.Value2 = "PANEL UTILITY";
                     cellBelow3.Font.Bold = true;
                     cellBelow3.Interior.Color = 49407; // Orange color
 
-                    Excel.Range cellright3 = costingSheet.Cells[startRow + 1, 3]; // Column B is index 2
+                    Excel.Range cellright3 = costingSheet.Cells[startRow + 2, 3]; // Column B is index 2
                     cellright3.Value2 = "1";
                     cellright3.Font.Bold = true; // Make the text bold
                     cellright3.Interior.Color = 49407;
@@ -229,12 +274,12 @@ namespace GaMeR
                     ApplyBorders(cellBelow3);
                     ApplyBorders(cellright3);
 
-                    Excel.Range cellBelow4 = costingSheet.Cells[startRow + 2, 2];
+                    Excel.Range cellBelow4 = costingSheet.Cells[startRow + 3, 2];
                     cellBelow4.Value2 = "ENCLOSURE AND BUSBAR + EARTH";
                     cellBelow4.Font.Bold = true;
                     cellBelow4.Interior.Color = 49407; // Orange color
 
-                    Excel.Range cellright4 = costingSheet.Cells[startRow + 2, 3]; // Column B is index 2
+                    Excel.Range cellright4 = costingSheet.Cells[startRow + 3, 3]; // Column B is index 2
                     cellright4.Value2 = "1";
                     cellright4.Font.Bold = true; // Make the text bold
                     cellright4.Interior.Color = 49407;
@@ -244,11 +289,30 @@ namespace GaMeR
                     ApplyBorders(cellright4);
 
                     // Move startRow down by 5 to account for the four extra rows
-                    startRow += 3;
+                    startRow += 4;
+                }
+                templateWorkbook.Close(false);
+                costingSheet.Activate();
+                Excel.Range usedRange = costingSheet.UsedRange;
+
+                // List to hold the orange cells
+                List<Excel.Range> orangeCells = new List<Excel.Range>();
+
+                // Collect all orange cells with values
+                for (int row = usedRange.Rows.Count; row >= 1; row--)
+                {
+                    Excel.Range cell = costingSheet.Cells[row, 2]; // Column B is index 2
+                    if (cell.Interior.Color == 49407 && !string.IsNullOrEmpty(cell.Value2?.ToString()))
+                    {
+                        orangeCells.Add(cell);
+                    }
                 }
                 
-                costingSheet.Activate();
-                templateWorkbook.Close(false);
+                foreach (var orangeCell in orangeCells)
+                {
+                    Formfind form = new Formfind(orangeCell.Value2.ToString(), orangeCell);
+                }
+
                 label25.Visible = false;
             }
             catch (Exception ex) 
@@ -257,10 +321,13 @@ namespace GaMeR
             }
             finally
             {
-                
+                Marshal.ReleaseComObject( templateWorkbook );
+                newWorkbook.Application.DisplayAlerts = true;
+                this.Close();
             }
 
         }
+        
         void ApplyBorders(Excel.Range cell)
         {
             cell.Borders[Excel.XlBordersIndex.xlEdgeLeft].LineStyle = Excel.XlLineStyle.xlContinuous;

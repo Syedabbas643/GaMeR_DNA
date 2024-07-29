@@ -870,15 +870,15 @@ namespace GaMeR
                 int countColumn = 6;
                 Dictionary<string, int> productNextRow = new Dictionary<string, int>
                         {
-                            { "ACB", 8 },
-                            { "MCCB", 10 },
-                            { "METER", 12 },
-                            { "MCB", 14 },
-                            { "LAMP", 16 },
-                            { "REA-CAP", 18 },
-                            { "CONTACTOR", 20 },
-                            { "CT", 22 },
-                            { "NULL", 31 }
+                            { "ACB", 60 },
+                            { "MCCB", 62 },
+                            { "METER", 64 },
+                            { "MCB", 66 },
+                            { "LAMP", 68 },
+                            { "REA-CAP", 70 },
+                            { "CONTACTOR", 72 },
+                            { "CT", 74 },
+                            { "NULL", 83 }
                         };
 
                 List<Excel.Range> headings = new List<Excel.Range>();
@@ -917,12 +917,12 @@ namespace GaMeR
 
                     insertColumn.EntireColumn.Insert(Excel.XlInsertShiftDirection.xlShiftToRight, Excel.XlInsertFormatOrigin.xlFormatFromLeftOrAbove);
 
-                    Excel.Range pasteRange = newSheet.Cells[4, insertColumn.Column - 1];
+                    Excel.Range pasteRange = newSheet.Cells[56, insertColumn.Column - 1];
                     pasteRange.Value = cellValue;
                     pasteRange.WrapText = true;
                     pasteRange.Columns.AutoFit();
 
-                    Excel.Range pasteRange2 = newSheet.Cells[5, insertColumn.Column - 1];
+                    Excel.Range pasteRange2 = newSheet.Cells[57, insertColumn.Column - 1];
                     pasteRange2.Value = cellcountvalue;
 
 
@@ -939,17 +939,17 @@ namespace GaMeR
                             string columnCValue = currentSheet.Cells[cell.Row, "C"].Value2?.ToString();
                             string columnDValue = currentSheet.Cells[cell.Row, "D"].Value2?.ToString();
                             string make = currentSheet.Cells[cell.Row, "D"].Value2?.ToString();
-                            string disc = currentSheet.Cells[cell.Row, "G"].Value2?.ToString();
+                            string disc = currentSheet.Cells[cell.Row, "G"].Formula;
 
-                            if (make == "ALUMINIUM" || make == null || make == "" || make == "KCIPL")
-                            {
-                                continue;
+                            //if (make == "ALUMINIUM" || make == null || make == "" || make == "KCIPL")
+                            //{
+                                //continue;
 
-                            }
-                            else if (make.Contains("L&T"))
-                            {
-                                make = "L&T";
-                            }
+                            //}
+                            //else if (make.Contains("L&T"))
+                            //{
+                                //make = "L&T";
+                            //}
 
                             double price = Convert.ToDouble(currentSheet.Cells[cell.Row, "F"].Value2);
                             double product = Convert.ToDouble(currentSheet.Cells[cell.Row, "L"].Value2);
@@ -979,7 +979,7 @@ namespace GaMeR
                                     newSheet.Cells[targetRow, "D"].Value2 = columnDValue;
                                     newSheet.Cells[targetRow, countColumn + i].Value2 = product;
                                     newSheet.Cells[targetRow, countColumn + i + 2].Value2 = price.ToString();
-                                    newSheet.Cells[targetRow, countColumn + i + 4].Value2 = disc;
+                                    newSheet.Cells[targetRow, countColumn + i + 4].Formula = disc;
                                     newSheet.Cells[targetRow, countColumn + i + 6].Value2 = make;
 
                                     productNextRow[productName] = targetRow + 1;
@@ -1077,7 +1077,7 @@ namespace GaMeR
                 string discLetter = GetExcelColumnName(disccolumn);
                 Excel.Range columndisc = usedRangeNew.Columns[discLetter];
                 columndisc.NumberFormat = "0%";
-                for (int row = 7; row <= usedRangeNew.Rows.Count; row++)
+                for (int row = 59; row <= usedRangeNew.Rows.Count; row++)
                 {
                     Excel.Range checkcell = newSheet.Cells[row, disccolumn];
                     if (checkcell != null && checkcell.Value != null)
@@ -1093,7 +1093,7 @@ namespace GaMeR
 
                 }
 
-                for (int row = 7; row <= usedRangeNew.Rows.Count; row++)
+                for (int row = 59; row <= usedRangeNew.Rows.Count; row++)
                 {
                     Excel.Range formulaCell = newSheet.Cells[row, lastColumn];
                     string formula = $"=SUM(F{row}:{lastColumnLetter}{row})";
@@ -1232,7 +1232,7 @@ namespace GaMeR
                 string auto = selectedRange.Value2?.ToString();
 
                 // Create a new instance of the form and show it
-                formfind = new Formfind(auto);
+                formfind = new Formfind(auto,selectedRange);
                 
             }
             else
@@ -1244,7 +1244,7 @@ namespace GaMeR
                 }
                 string auto = "";
                 // Create a new instance of the form and show it
-                formfind = new Formfind(auto);
+                formfind = new Formfind(auto,selectedRange);
                 formfind.OnFeederDataEntered += (feederData) =>
                 {
                     string heading = $"{feederData.FeederName} -";

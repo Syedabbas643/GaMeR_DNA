@@ -26,7 +26,7 @@ namespace GaMeR
     public partial class Formfind : Form
     {
         TextBox feeder = new TextBox();
-        public Formfind(string auto)
+        public Formfind(string auto,Excel.Range SelectedRange)
         {
             InitializeComponent();
             
@@ -41,7 +41,7 @@ namespace GaMeR
             }
             else
             {
-                openasdatabase(auto);
+                openasdatabase(auto,SelectedRange);
             }
         }
         public class FormData
@@ -62,7 +62,7 @@ namespace GaMeR
         }
         public event Action<FormData> OnFeederDataEntered;
 
-        public void openasdatabase(string auto)
+        public void openasdatabase(string auto,Excel.Range SelectedRange)
         {
             try
             {
@@ -208,8 +208,8 @@ namespace GaMeR
 
                 if (label1.Text == "PANEL UTILITY" || label1.Text == "ENCLOSURE AND BUSBAR + EARTH" || label1.Text.Contains("MCB"))
                 {
-                    
-                    Run_Click(this, EventArgs.Empty);
+
+                    Run_Clickalt(SelectedRange, EventArgs.Empty);
                 }
                 else
                 {
@@ -218,7 +218,7 @@ namespace GaMeR
             }
             catch (Exception ex)
             {
-                System.Windows.Forms.MessageBox.Show($"Error: {ex.Message}");
+                System.Windows.Forms.MessageBox.Show($"Error on initialize: {ex.Message}");
             }
         }
         public void openasnewform()
@@ -328,10 +328,25 @@ namespace GaMeR
 
         private void Run_Click(object sender, EventArgs e)
         {
+            var excelApp = ExcelDnaUtil.Application as Excel.Application;
+            Excel.Range selectedRange = excelApp.Selection as Excel.Range;
+
+            // Check if the selected range is valid
+            if (selectedRange == null || selectedRange.Cells.Count != 1)
+            {
+                MessageBox.Show("Please select a single cell.");
+                return;
+            }
+
+            Run_Clickalt(selectedRange, EventArgs.Empty);
+        }
+
+        private void Run_Clickalt(object sender, EventArgs e)
+        {
             Excel.Application excelApp = ExcelDnaUtil.Application as Excel.Application;
             Excel.Workbook currentWorkbook = excelApp.ActiveWorkbook;
-            Excel.Worksheet currentSheet = excelApp.ActiveSheet;
             Excel.Workbook extWorkbook = null;
+            Excel.Range selectedRange = sender as Excel.Range;
             try
             {
                 bool containsRYB = rybcheckbox.Checked;
@@ -445,14 +460,6 @@ namespace GaMeR
                     }
                 }
 
-                Excel.Range selectedRange = (Excel.Range)excelApp.Selection;
-
-                // Check if the selected range is a single cell
-                if (selectedRange == null || selectedRange.Cells.Count != 1)
-                {
-                    System.Windows.Forms.MessageBox.Show("Please select a single cell.");
-                    return;
-                }
 
                 // Define the path to the database file
                 string savedPath = GetDatabaseFilePath();
@@ -502,7 +509,7 @@ namespace GaMeR
                 string feederqty = "1";
                 bool foundqty = false;
                 string bartype = "AL";
-                Excel.Range fullRange = currentSheet.UsedRange;
+                Excel.Range fullRange = selectedRange.Worksheet.UsedRange;
                 for (int row = selectedRange.Row - 1; row >= 1; row--)
                 {
                     Excel.Range cell = fullRange.Cells[row, 2];
@@ -578,6 +585,9 @@ namespace GaMeR
                                 poleType = "TPN";
                                 break;
                             case "TP":
+                                poleType = "TPN";
+                                break;
+                            case "3P":
                                 poleType = "TPN";
                                 break;
                             case "FP":
@@ -677,6 +687,9 @@ namespace GaMeR
                                 poleType = "X";
                                 break;
                             case "TP":
+                                poleType = "X";
+                                break;
+                            case "3P":
                                 poleType = "X";
                                 break;
                             case "FP":
@@ -998,6 +1011,9 @@ namespace GaMeR
                             case "TP":
                                 poleType = "TPN";
                                 break;
+                            case "3P":
+                                poleType = "TPN";
+                                break;
                             case "FP":
                                 poleType = "4P";
                                 break;
@@ -1271,13 +1287,22 @@ namespace GaMeR
                             case "SP":
                                 poleType = "SP";
                                 break;
+                            case "1P":
+                                poleType = "SP";
+                                break;
                             case "DP":
+                                poleType = "DP";
+                                break;
+                            case "2P":
                                 poleType = "DP";
                                 break;
                             case "TPN":
                                 poleType = "TP";
                                 break;
                             case "TP":
+                                poleType = "TP";
+                                break;
+                            case "3P":
                                 poleType = "TP";
                                 break;
                             case "FP":
@@ -1596,16 +1621,18 @@ namespace GaMeR
                     selectedRange.Font.Bold = true;
 
                     Excel.Range totalprice = selectedRange.Offset[3, 8];
-
+                    string totalrpiceref = totalprice.Address[false, false];
                     int totalpriceRow = totalprice.Row;
                     string foundedcell = null;
-                    Excel.Range usedRange = currentSheet.UsedRange;
+                    string foundedhead = null;
+                    Excel.Range usedRange = selectedRange.Worksheet.UsedRange;
 
                     for (int row = totalpriceRow - 1; row >= 1; row--)
                     {
                         Excel.Range cell = usedRange.Cells[row, 2];
                         if (cell.Interior.Color == 15773696) 
                         {
+                            foundedhead = cell.Value2.ToString();
                             foundedcell = cell.Offset[0, 8].Address[false, false]; // Append the cell address to the formula
                             break;
                         }
@@ -1621,6 +1648,38 @@ namespace GaMeR
                     string sumFormula = $"=SUM({foundedcell}:J{(totalpriceRow - 1).ToString()})";
                     totalprice.Formula = sumFormula;
                     totalprice.NumberFormat = "0";
+                    Excel.Worksheet titlesheet = null;
+                    foreach (Excel.Worksheet wb in currentWorkbook.Worksheets)
+                    {
+                        if (wb.Name.Equals("TITLE", StringComparison.OrdinalIgnoreCase))
+                        {
+                            titlesheet = wb;
+                            break;
+                        }
+                    }
+
+                    if (titlesheet != null)
+                    {
+                        Excel.Range titlerange = titlesheet.UsedRange;
+                        foreach (Excel.Range row in titlerange.Rows)
+                        {
+                            string cellValue = row.Cells[1, 2].Value2?.ToString() ?? "";
+                            if (cellValue == foundedhead)
+                            {
+                                row.Cells[1, 4].Formula = $"=COSTING!{totalrpiceref}";
+                                row.Cells[1, 5].Formula = $"={row.Cells[1,4].Address[false, false]}*$F$7";
+                                row.Cells[1, 6].Formula = $"={row.Cells[1,4].Address[false, false]}+{row.Cells[1,5].Address[false, false]}";
+                                row.Cells[1, 7].Formula = $"=ROUNDUP({row.Cells[1, 6].Address[false, false]},-3)";
+                                row.Cells[1, 9].Formula = $"={row.Cells[1, 7].Address[false, false]}*{row.Cells[1, 8].Address[false, false]}";
+
+                            }
+                        }
+
+                    }
+                    else
+                    {
+                        MessageBox.Show("TITLE sheet not found.");
+                    }
                 }
 
                 //changing the names in feeder heading
@@ -1676,8 +1735,8 @@ namespace GaMeR
                         selectedRange.Offset[i, 9].Value2 = panelqty;
                     }
                 }
+                Marshal.ReleaseComObject(extWorkbook);
 
-                
 
 
 
@@ -1693,18 +1752,19 @@ namespace GaMeR
                 excelApp.DisplayAlerts = true;  // Disable alerts
                 excelApp.ErrorCheckingOptions.BackgroundChecking = true;
                 excelApp.ScreenUpdating = true;
+                currentWorkbook.Activate();
 
                 Marshal.ReleaseComObject(excelApp);
                 Marshal.ReleaseComObject(currentWorkbook);
-                Marshal.ReleaseComObject(extWorkbook);
-
-
+                
                 this.Close();
 
             }
 
 
         }
+        
+
         private void button1_Click(object sender, EventArgs e)
         {
             if (feeder.Text != "") 
