@@ -293,25 +293,7 @@ namespace GaMeR
                 }
                 templateWorkbook.Close(false);
                 costingSheet.Activate();
-                Excel.Range usedRange = costingSheet.UsedRange;
-
-                // List to hold the orange cells
-                List<Excel.Range> orangeCells = new List<Excel.Range>();
-
-                // Collect all orange cells with values
-                for (int row = usedRange.Rows.Count; row >= 1; row--)
-                {
-                    Excel.Range cell = costingSheet.Cells[row, 2]; // Column B is index 2
-                    if (cell.Interior.Color == 49407 && !string.IsNullOrEmpty(cell.Value2?.ToString()))
-                    {
-                        orangeCells.Add(cell);
-                    }
-                }
                 
-                foreach (var orangeCell in orangeCells)
-                {
-                    Formfind form = new Formfind(orangeCell.Value2.ToString(), orangeCell);
-                }
 
                 label25.Visible = false;
             }

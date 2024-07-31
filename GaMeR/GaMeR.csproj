@@ -7,6 +7,8 @@
 
   <ItemGroup>
     <None Remove="Images\bom2.png" />
+    <None Remove="Images\find2.png" />
+    <None Remove="Images\layout.png" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,6 +31,8 @@
 		<EmbeddedResource Include="Images\data2.png" />
 		<EmbeddedResource Include="Images\data3.png" />
 		<EmbeddedResource Include="Images\find.png" />
+		<EmbeddedResource Include="Images\find2.png" />
+		<EmbeddedResource Include="Images\layout.png" />
 		<EmbeddedResource Include="Images\server.png" />
 	</ItemGroup>
 

@@ -16,6 +16,8 @@ using System.Drawing;
 using System.Text.RegularExpressions;
 using System.Reflection;
 using Microsoft.Office.Interop.Excel;
+using Microsoft.Office.Core;
+using IRibbonControl = ExcelDna.Integration.CustomUI.IRibbonControl;
 
 namespace GaMeR
 {
@@ -24,6 +26,7 @@ namespace GaMeR
     {
         private Formfind formfind;
         private Form1 form1;
+        private Find_Data Find_Data;
         public override string GetCustomUI(string RibbonID)
         {
             return @"
@@ -33,13 +36,19 @@ namespace GaMeR
               <tab id=""tab2"" label=""GaMeR2"">
                 <group id=""group2"" label=""Automate"">
                   <button id=""data1"" label=""Create New Costing"" getImage=""GetCustomImage"" size=""large"" onAction=""OnDataClick""/>
-                  <button id=""server"" label=""database folder"" getImage=""GetCustomImage"" onAction=""OndatabasefolderClick""/>
+                  <separator id=""separator2""/>
+                  <button id=""data2"" label=""GET from Feeder"" getImage=""GetCustomImage"" size=""large"" onAction=""OnfeederClick""/>
+                  <button id=""find2"" label=""Search feeder"" getImage=""GetCustomImage"" size=""large"" onAction=""OnsearchClick""/>
                   <separator id=""separator1""/>
-                  <button id=""find"" label=""Find in Database"" getImage=""GetCustomImage"" size=""large"" onAction=""OnfindClick""/>
+                  <button id=""data3"" label=""Automate"" getImage=""GetCustomImage"" size=""large"" onAction=""OnfindClick""/>
+                  <button id=""find"" label=""Automate all Feeders"" getImage=""GetCustomImage"" size=""large"" onAction=""OnallClick""/>
                   <separator id=""separator3""/>
-                  <button id=""bom"" label=""Make Bill of OLD Materials"" getImage=""GetCustomImage"" size=""large"" onAction=""OnbomClick""/>
-                  <button id=""bom2"" label=""Make Bill of NEW Materials"" getImage=""GetCustomImage"" size=""large"" onAction=""OnbomnewClick""/>
+                  <button id=""bom2"" label=""Make Bill of Materials"" getImage=""GetCustomImage"" size=""large"" onAction=""OnbomnewClick""/>
                   <button id=""cad"" label=""Analyse Costing"" getImage=""GetCustomImage"" size=""large"" onAction=""OnanalyseClick""/>
+                  <button id=""bom"" label=""Make Bill of OLD Materials"" getImage=""GetCustomImage"" onAction=""OnbomClick""/>
+                  <button id=""server"" label=""database folder"" getImage=""GetCustomImage"" onAction=""OndatabasefolderClick""/>
+                  <separator id=""separator4""/>
+                  <button id=""layout"" label=""Automate GA sheet"" getImage=""GetCustomImage"" size=""large"" onAction=""OngaClick""/>
                 </group>
               </tab>
             </tabs>
@@ -75,6 +84,243 @@ namespace GaMeR
                 {
                     return reader.ReadToEnd();
                 }
+            }
+        }
+
+        public void OnfeederClick(IRibbonControl control)
+        {
+            var excelApp = ExcelDnaUtil.Application as Excel.Application;
+            Excel.Range selectedCell = excelApp.Selection as Excel.Range;
+            if (selectedCell != null && selectedCell.Value2 != null)
+            {
+                
+                CopyFromExternalWorkbook(selectedCell);
+            }
+        }
+        private void CopyFromExternalWorkbook(Excel.Range selectedCell)
+        {
+            var excelApp = ExcelDnaUtil.Application as Excel.Application;
+            Excel.Workbook currentWorkbook = excelApp.ActiveWorkbook;
+            Excel.Worksheet currentSheet = excelApp.ActiveSheet;
+            Excel.Workbook extWorkbook = null;
+            Excel.Worksheet extSheet = null;
+
+
+            try
+            {
+                string savedPath = GetDatabaseFilePath();
+
+                if (string.IsNullOrEmpty(savedPath))
+                {
+                    MessageBox.Show("No folder path selected. Please select a folder first.");
+                    return;
+                }
+                string extFilePath = System.IO.Path.Combine(savedPath, "feeder_database.xlsx");
+
+                extWorkbook = excelApp.Workbooks.Open(
+                    extFilePath,
+                    UpdateLinks: 0, // 0 to not update external links
+                    ReadOnly: true,
+                    Editable: false,
+                    IgnoreReadOnlyRecommended: true
+                );
+
+                int matchCount = 0;
+
+                foreach (Excel.Worksheet sheet in extWorkbook.Sheets)
+                {
+                    // Check if cell A1 in the sheet contains the desired value (partial, case-insensitive match)
+                    Excel.Range cellA1 = sheet.Cells[1, 2];
+                    if (cellA1.Value2 != null && cellA1.Value2.ToString().IndexOf(selectedCell.Value2.ToString(), StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        extSheet = sheet;
+                        matchCount++;
+                    }
+                }
+
+                if (extSheet != null && matchCount == 1)
+                {
+                    Excel.Range copyRange = extSheet.UsedRange;
+                    int numberOfRows = copyRange.Rows.Count;
+
+                    // Calculate the paste range (one cell below the selected cell)
+                    int pasteRow = selectedCell.Row;
+                    int pasteColumn = selectedCell.Column -1;
+
+                    // Insert the required number of rows below the selected cell
+                    for (int i = 1; i < numberOfRows; i++)
+                    {
+                        Excel.Range insertRange = currentSheet.Rows[selectedCell.Row + i];
+                        insertRange.Insert(Excel.XlInsertShiftDirection.xlShiftDown, false);
+                    }
+
+                    copyRange.Copy();
+                    Excel.Range pasteRange = currentSheet.Cells[selectedCell.Row, pasteColumn];
+                    pasteRange.PasteSpecial(Excel.XlPasteType.xlPasteAll,
+                                            Excel.XlPasteSpecialOperation.xlPasteSpecialOperationNone,
+                                            false, false);
+
+
+                    excelApp.CutCopyMode = 0;
+
+                    extWorkbook.Close(false);
+                }
+                else if (matchCount > 1)
+                {
+                    extWorkbook.Close(false);
+                    System.Windows.Forms.MessageBox.Show("Multiple sheets contain the SAME value. Please refine your Data.");
+                }
+                else
+                {
+                    extWorkbook.Close(false);
+                    System.Windows.Forms.MessageBox.Show("No match found in the external database.");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show($"Error: {ex.Message}");
+            }
+            finally
+            {
+
+                if (extWorkbook != null)
+                {
+                    Marshal.ReleaseComObject(extWorkbook);
+                }
+            }
+
+        }
+        public void OnsearchClick(IRibbonControl control)
+        {
+            // Close the existing form if it is open
+            if (Find_Data != null && !Find_Data.IsDisposed)
+            {
+                Find_Data.Close();
+                Find_Data.Dispose();
+            }
+
+            // Create a new instance of the form and show it
+            Find_Data = new Find_Data();
+            Find_Data.Show();
+        }
+        public void OngaClick(IRibbonControl control)
+        {
+            try 
+            {
+                var excelApp = ExcelDnaUtil.Application as Excel.Application;
+                Excel.Worksheet currentSheet = excelApp.ActiveSheet;
+                Excel.Workbook currentWorkbook = excelApp.ActiveWorkbook;
+
+                if (currentSheet.Name != "COSTING") 
+                {
+                    MessageBox.Show("PLZ RUN THE SCRIPT ON COSTING SHEET ONLY");
+                    return;
+                }
+
+                Excel.Range usedRange = currentSheet.UsedRange;
+                Excel.Range columnB = usedRange.Columns["B"];
+
+                var panelData = new List<(Excel.Range panelHeading, List<(Excel.Range feederHeading, Excel.Range feederQuantity)>)>();
+
+                List<(Excel.Range feederHeading, Excel.Range feederQuantity)> currentFeeders = null;
+                Excel.Range currentPanelHeading = null;
+
+                foreach (Excel.Range cell in columnB.Cells)
+                {
+                    if (cell.Interior.Color == 15773696)
+                    {
+                        if (currentPanelHeading != null && currentFeeders != null)
+                        {
+                            panelData.Add((currentPanelHeading, currentFeeders));
+                        }
+
+                        currentPanelHeading = cell;
+                        currentFeeders = new List<(Excel.Range feederHeading, Excel.Range feederQuantity)>();
+                    }
+                    else if (cell.Interior.Color == 49407 && !string.IsNullOrEmpty(cell.Value2?.ToString()) && cell.Value2 != "PANEL UTILITY" && cell.Value2 != "ENCLOSURE AND BUSBAR + EARTH")
+                    {
+                        currentFeeders?.Add((cell, cell.Offset[0, 1])); // Add feeder heading and its quantity (one cell to the right)
+                    }
+                }
+
+                if (currentPanelHeading != null && currentFeeders != null)
+                {
+                    panelData.Add((currentPanelHeading, currentFeeders));
+                }
+
+                // Create a new sheet
+                Excel.Worksheet newSheet = (Excel.Worksheet)currentWorkbook.Sheets.Add();
+                
+
+                // Start copying headings to the new sheet
+                int startRow = 1; // Start at row 1
+                foreach (var (panelHeading, feederHeadings) in panelData)
+                {
+                    if (panelHeading != null)
+                    {
+                        Excel.Range widthCell = newSheet.Cells[startRow, 1];
+                        widthCell.Value2 = "Width";
+                        widthCell.Font.Bold = true;
+                        ApplyBorders(widthCell);
+                        Excel.Range heightCell = newSheet.Cells[startRow + 1, 1];
+                        heightCell.Value2 = "Height";
+                        heightCell.Font.Bold = true;
+                        ApplyBorders(heightCell);
+                        Excel.Range depthCell = newSheet.Cells[startRow + 2, 1];
+                        depthCell.Value2 = "Depth";
+                        depthCell.Font.Bold = true;
+                        ApplyBorders(depthCell);
+
+                        // Insert 0 in column B (second column)
+                        Excel.Range zeroCell = newSheet.Cells[startRow, 2];
+                        zeroCell.Value2 = 0;
+                        ApplyBorders(zeroCell);
+                        Excel.Range zeroCell1 = newSheet.Cells[startRow + 1, 2];
+                        zeroCell1.Value2 = 0;
+                        ApplyBorders(zeroCell1);
+                        Excel.Range zeroCell2 = newSheet.Cells[startRow + 2, 2];
+                        zeroCell2.Value2 = 0;
+                        ApplyBorders(zeroCell2);
+
+                        Excel.Range targetRange = newSheet.Range[newSheet.Cells[startRow, 4], newSheet.Cells[startRow, 8]];
+                        targetRange.Merge();
+                        targetRange.Value2 = panelHeading.Value2;
+                        targetRange.Interior.Color = panelHeading.Interior.Color;
+                        targetRange.Font.Bold = panelHeading.Font.Bold;
+                        targetRange.HorizontalAlignment = Excel.XlHAlign.xlHAlignCenter;
+
+                        // Apply borders (if needed, you can modify this part to match your desired border settings)
+                        ApplyBorders(targetRange);
+                    }
+
+                    
+                    int feederStartColumn = 15;
+                    int feedercolumn = startRow + 1;
+                    foreach (var (feederHeading, feederQuantity) in feederHeadings)
+                    {
+                        Excel.Range newFeederCell = newSheet.Cells[feedercolumn, feederStartColumn];
+                        newFeederCell.Value2 = feederHeading.Value2;
+                        newFeederCell.Font.Bold = feederHeading.Font.Bold;
+                        ApplyBorders(newFeederCell);
+
+                        Excel.Range newFeederQuantityCell = newSheet.Cells[feedercolumn, feederStartColumn + 1];
+                        newFeederQuantityCell.Value2 = feederQuantity.Value2;
+                        newFeederQuantityCell.Font.Bold = feederQuantity.Font.Bold;
+                        newFeederQuantityCell.HorizontalAlignment = Excel.XlHAlign.xlHAlignCenter;
+                        ApplyBorders(newFeederQuantityCell);
+
+                        feedercolumn++;
+                    }
+
+                    startRow += 40;
+                    
+                }
+                newSheet.Columns[15].AutoFit();
+
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show($"Error: {ex.Message}");
             }
         }
 
@@ -1268,6 +1514,46 @@ namespace GaMeR
             
         }
 
+        public void OnallClick(IRibbonControl control)
+        {
+            try
+            {
+                var excelApp = ExcelDnaUtil.Application as Excel.Application;
+                Excel.Worksheet currentSheet = excelApp.ActiveSheet;
+                Excel.Workbook currentWorkbook = excelApp.ActiveWorkbook;
+
+                if (currentSheet.Name != "COSTING") 
+                {
+                    MessageBox.Show("PLZ RUN THE SCRIPT ON COSTING SHEET ONLY");
+                    return;
+                }
+                Excel.Range usedRange = currentSheet.UsedRange;
+
+                // List to hold the orange cells
+                List<Excel.Range> orangeCells = new List<Excel.Range>();
+
+                // Collect all orange cells with values
+                for (int row = usedRange.Rows.Count; row >= 1; row--)
+                {
+                    Excel.Range cell = currentSheet.Cells[row, 2]; // Column B is index 2
+                    if (cell.Interior.Color == 49407 && !string.IsNullOrEmpty(cell.Value2?.ToString()))
+                    {
+                        orangeCells.Add(cell);
+                    }
+                }
+
+                foreach (var orangeCell in orangeCells)
+                {
+                    Formfind form = new Formfind(orangeCell.Value2.ToString(), orangeCell);
+                }
+
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error: {ex.Message}");
+            }
+        }
+
         public void OnDataClick(IRibbonControl control)
         {
             // Close the existing form if it is open
@@ -1280,6 +1566,35 @@ namespace GaMeR
             // Create a new instance of the form and show it
             form1 = new Form1();
             form1.Show();
+        }
+
+        [ExcelFunction(Description = "XLOOKUP UDF for Excel 2016")]
+        public static object XLookup(
+        [ExcelArgument(Name = "lookup_value", Description = "Value to search for")] object lookupValue,
+        [ExcelArgument(Name = "lookup_array", Description = "Array to search within")] object[] lookupArray,
+        [ExcelArgument(Name = "return_array", Description = "Array to return values from")] object[] returnArray,
+        [ExcelArgument(Name = "if_not_found", Description = "Value to return if not found")] object ifNotFound = null
+    )
+        {
+            // Ensure that lookupArray and returnArray are of the same length
+            if (lookupArray.Length != returnArray.Length)
+            {
+                return ExcelError.ExcelErrorValue;
+            }
+
+            // Convert lookupArray and returnArray to strings
+            string lookupValueStr = Convert.ToString(lookupValue);
+            for (int i = 0; i < lookupArray.Length; i++)
+            {
+                string lookupArrayStr = Convert.ToString(lookupArray[i]);
+                if (lookupValueStr.Equals(lookupArrayStr, StringComparison.OrdinalIgnoreCase))
+                {
+                    return returnArray[i];
+                }
+            }
+
+            // Return the ifNotFound value if no match is found
+            return ifNotFound ?? ExcelError.ExcelErrorNA;
         }
 
 

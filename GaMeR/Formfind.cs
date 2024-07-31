@@ -347,6 +347,7 @@ namespace GaMeR
             Excel.Workbook currentWorkbook = excelApp.ActiveWorkbook;
             Excel.Workbook extWorkbook = null;
             Excel.Range selectedRange = sender as Excel.Range;
+            Excel.Worksheet currentSheet = selectedRange.Worksheet;
             try
             {
                 bool containsRYB = rybcheckbox.Checked;
@@ -1736,10 +1737,6 @@ namespace GaMeR
                     }
                 }
                 Marshal.ReleaseComObject(extWorkbook);
-
-
-
-
             }
             catch (Exception ex)
             {
@@ -1753,6 +1750,7 @@ namespace GaMeR
                 excelApp.ErrorCheckingOptions.BackgroundChecking = true;
                 excelApp.ScreenUpdating = true;
                 currentWorkbook.Activate();
+                currentSheet.Activate();
 
                 Marshal.ReleaseComObject(excelApp);
                 Marshal.ReleaseComObject(currentWorkbook);
