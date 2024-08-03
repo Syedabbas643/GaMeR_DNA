@@ -18,6 +18,9 @@ using System.Reflection;
 using Microsoft.Office.Interop.Excel;
 using Microsoft.Office.Core;
 using IRibbonControl = ExcelDna.Integration.CustomUI.IRibbonControl;
+using IRibbonUI = ExcelDna.Integration.CustomUI.IRibbonUI;
+using System.Net.Http;
+using Newtonsoft.Json;
 
 namespace GaMeR
 {
@@ -27,13 +30,15 @@ namespace GaMeR
         private Formfind formfind;
         private Form1 form1;
         private Find_Data Find_Data;
+        private Timer _authorizationCheckTimer;
+        
         public override string GetCustomUI(string RibbonID)
         {
             return @"
               <customUI xmlns=""http://schemas.microsoft.com/office/2009/07/customui"" onLoad=""OnLoad"">
           <ribbon>
             <tabs>
-              <tab id=""tab2"" label=""GaMeR2"">
+              <tab id=""tab2"" label=""GaMeR"">
                 <group id=""group2"" label=""Automate"">
                   <button id=""data1"" label=""Create New Costing"" getImage=""GetCustomImage"" size=""large"" onAction=""OnDataClick""/>
                   <separator id=""separator2""/>
@@ -48,7 +53,11 @@ namespace GaMeR
                   <button id=""bom"" label=""Make Bill of OLD Materials"" getImage=""GetCustomImage"" onAction=""OnbomClick""/>
                   <button id=""server"" label=""database folder"" getImage=""GetCustomImage"" onAction=""OndatabasefolderClick""/>
                   <separator id=""separator4""/>
+                  <button id=""auto2"" label=""Copy to below FEEDERS"" getImage=""GetCustomImage"" size=""large"" onAction=""OnbelowClick""/>
+                  <button id=""auto"" label=""Read COSTING sheet"" getImage=""GetCustomImage"" size=""large"" onAction=""OnreadClick""/>
                   <button id=""layout"" label=""Automate GA sheet"" getImage=""GetCustomImage"" size=""large"" onAction=""OngaClick""/>
+                  <separator id=""separator5""/>
+                  <button id=""about"" label=""About Add-in"" getImage=""GetCustomImage"" size=""large"" onAction=""OnaboutClick""/>
                 </group>
               </tab>
             </tabs>
@@ -86,7 +95,212 @@ namespace GaMeR
                 }
             }
         }
+        public void CheckAuthorizationAsync()
+        {
+            string clientName = ConfigurationManager.AppSettings["name"];
+            if (clientName == null) 
+            {
+                clientName = "test";
+            }
+            string apiUrl = "https://syedabbas.up.railway.app/check";
 
+            try
+            {
+                _authorizationCheckTimer = new Timer();
+                _authorizationCheckTimer.Interval = 600000; // 10 minutes in milliseconds
+                _authorizationCheckTimer.Tick += async (sender, args) =>
+                {
+                    using (HttpClient client = new HttpClient())
+                    {
+                        try 
+                        {
+                            HttpResponseMessage response = await client.GetAsync($"{apiUrl}/{clientName}");
+                            if (response.IsSuccessStatusCode)
+                            {
+                                string responseBody = await response.Content.ReadAsStringAsync();
+                                bool isAuthorized = JsonConvert.DeserializeObject<bool>(responseBody);
+
+                                if (isAuthorized)
+                                {
+                                    _authorizationCheckTimer.Stop();
+                                }
+                                else
+                                {
+                                    ExcelAsyncUtil.QueueAsMacro(() =>
+                                    {
+                                        try
+                                        {
+                                            Excel.Application excelApp = ExcelDnaUtil.Application as Excel.Application;
+                                            excelApp.DisplayAlerts = false; // Suppress any save changes dialogs
+                                            excelApp.Quit(); // Quit the application
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Console.WriteLine("Error closing Excel: " + ex.Message);
+                                        }
+                                    });
+
+                                    Environment.Exit(0);
+                                }
+
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e.Message);
+                        }
+                    }
+
+                };
+                _authorizationCheckTimer.Start();
+            }
+
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
+        }
+        
+        public void OnLoad(IRibbonUI ribbonUI)
+        {
+            
+           CheckAuthorizationAsync();
+
+        }
+
+        public void OnaboutClick(IRibbonControl control)
+        {
+            MessageBox.Show(
+                "Welcome to the Add-In!\n\n" +
+                "Thank you for choosing my Excel add-in to enhance your productivity and streamline your workflows. \n\n" +
+                "My Mission is to simplify your tasks and unlock new possibilities within Excel, helping you turn challenges into opportunities.\n\n" +
+                ">>Nothing is impossible<<\n\n" +
+                "Developed by --- GaMeR " +
+                "",
+                "About GaMeR Add-In",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information
+            );
+        }
+        public void OnreadClick(IRibbonControl control)
+        {
+            var excelApp = ExcelDnaUtil.Application as Excel.Application;
+            Excel.Workbook costingWorkbook = null;
+            Excel.Worksheet costingSheet = null;
+
+            try
+            {
+                string savedPath = GetDatabaseFilePath();
+
+                if (string.IsNullOrEmpty(savedPath))
+                {
+                    MessageBox.Show("No folder path selected. Please select a folder first.");
+                    return;
+                }
+                string extFilePath = System.IO.Path.Combine(savedPath, "database.xlsx");
+
+                using (OpenFileDialog openFileDialog = new OpenFileDialog())
+                {
+                    openFileDialog.Filter = "Excel Files|*.xls;*.xlsx";
+                    openFileDialog.Title = "Select an Excel File";
+
+                    if (openFileDialog.ShowDialog() == DialogResult.OK)
+                    {
+                        // Step 2: Open the selected workbook
+                        excelApp.DisplayAlerts = false;
+                        costingWorkbook = excelApp.Workbooks.Open(openFileDialog.FileName,false);
+
+                        // Find the COSTING sheet
+                        foreach (Excel.Worksheet sheet in costingWorkbook.Sheets)
+                        {
+                            if (sheet.Name.Equals("COSTING", StringComparison.OrdinalIgnoreCase))
+                            {
+                                costingSheet = sheet;
+                                break;
+                            }
+                        }
+
+                        if (costingSheet == null)
+                        {
+                            MessageBox.Show("The selected workbook does not contain a COSTING sheet.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        return; // Exit if no file is selected
+                    }
+                }
+
+                Excel.Workbook databaseWorkbook = excelApp.Workbooks.Open(
+                    extFilePath,
+                    UpdateLinks: 0, // 0 to not update external links
+                    ReadOnly: false,
+                    Editable: true
+                );
+                
+                HashSet<string> databaseValues = new HashSet<string>();
+
+                foreach (Excel.Worksheet sheet in databaseWorkbook.Sheets)
+                {
+                    Excel.Range usedRange = sheet.UsedRange;
+                    Excel.Range columnB = usedRange.Columns["B"];
+
+                    foreach (Excel.Range cell in columnB.Cells)
+                    {
+                        if (cell.Row > 52) // Exclude first 52 rows
+                        {
+                            string cellValue = cell.Value2?.ToString();
+                            if (cell.Interior.Color != 49407 && !string.IsNullOrEmpty(cellValue))
+                            {
+                                databaseValues.Add(cellValue);
+                            }
+                        }
+                    }
+                }
+
+                // Step 4: Compare and copy rows from the COSTING sheet
+                Excel.Workbook newWorkbook = excelApp.Workbooks.Add();
+                Excel.Worksheet newSheet = newWorkbook.Sheets[1];
+                int newSheetRow = 2;
+
+                Excel.Range costingUsedRange = costingSheet.UsedRange;
+                Excel.Range costingColumnB = costingUsedRange.Columns["B"];
+
+                foreach (Excel.Range cell in costingColumnB.Cells)
+                {
+                    if (cell.Row > 52) // Exclude first 52 rows
+                    {
+                        string cellValue = cell.Value2?.ToString();
+                        if (cell.Interior.Color != 49407 && cell.Interior.Color != 15773696 && cell.Interior.Color != 65535 && !string.IsNullOrEmpty(cellValue) && !databaseValues.Contains(cellValue))
+                        {
+                            databaseValues.Add(cellValue);
+                            Excel.Range entireRow = cell.EntireRow;
+                            entireRow.Copy(newSheet.Rows[newSheetRow]);
+                            newSheetRow++;
+                        }
+                    }
+                }
+                
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                excelApp.DisplayAlerts = true;
+
+                if (costingWorkbook != null)
+                {
+                    costingWorkbook.Close(false);
+                }
+            }
+        }
+        public void OnbelowClick(IRibbonControl control)
+        {
+
+        }
         public void OnfeederClick(IRibbonControl control)
         {
             var excelApp = ExcelDnaUtil.Application as Excel.Application;
@@ -1573,8 +1787,7 @@ namespace GaMeR
         [ExcelArgument(Name = "lookup_value", Description = "Value to search for")] object lookupValue,
         [ExcelArgument(Name = "lookup_array", Description = "Array to search within")] object[] lookupArray,
         [ExcelArgument(Name = "return_array", Description = "Array to return values from")] object[] returnArray,
-        [ExcelArgument(Name = "if_not_found", Description = "Value to return if not found")] object ifNotFound = null
-    )
+        [ExcelArgument(Name = "if_not_found", Description = "Value to return if not found")] object ifNotFound = null)
         {
             // Ensure that lookupArray and returnArray are of the same length
             if (lookupArray.Length != returnArray.Length)

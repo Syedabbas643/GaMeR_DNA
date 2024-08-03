@@ -6,6 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Images\about.png" />
+    <None Remove="Images\auto.png" />
+    <None Remove="Images\auto2.png" />
     <None Remove="Images\bom2.png" />
     <None Remove="Images\find2.png" />
     <None Remove="Images\layout.png" />
@@ -16,6 +19,8 @@
     <PackageReference Include="ExcelDna.IntelliSense" Version="1.8.0" />
     <PackageReference Include="ExcelDna.Interop" Version="15.0.1" />
     <PackageReference Include="ExcelDnaPack" Version="1.5.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="RestSharp" Version="111.4.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +29,9 @@
   </ItemGroup>
 
     <ItemGroup>
+		<EmbeddedResource Include="Images\about.png" />
+		<EmbeddedResource Include="Images\auto.png" />
+		<EmbeddedResource Include="Images\auto2.png" />
 		<EmbeddedResource Include="Images\bom2.png" />
 		<EmbeddedResource Include="Images\bom.png" />
 		<EmbeddedResource Include="Images\cad.png" />
