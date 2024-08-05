@@ -54,12 +54,17 @@
             this.test2 = new System.Windows.Forms.CheckBox();
             this.button1 = new System.Windows.Forms.Button();
             this.labelred = new System.Windows.Forms.Label();
+            this.asscheckbox = new System.Windows.Forms.CheckBox();
+            this.vsscheckbox = new System.Windows.Forms.CheckBox();
+            this.hrccheckbox = new System.Windows.Forms.CheckBox();
+            this.fusecombobox = new System.Windows.Forms.ComboBox();
+            this.reactorcheckbox = new System.Windows.Forms.CheckBox();
             this.SuspendLayout();
             // 
             // spdbox
             // 
             this.spdbox.AutoSize = true;
-            this.spdbox.Location = new System.Drawing.Point(31, 433);
+            this.spdbox.Location = new System.Drawing.Point(105, 410);
             this.spdbox.Name = "spdbox";
             this.spdbox.Size = new System.Drawing.Size(48, 17);
             this.spdbox.TabIndex = 48;
@@ -278,7 +283,7 @@
             // test1
             // 
             this.test1.AutoSize = true;
-            this.test1.Location = new System.Drawing.Point(190, 410);
+            this.test1.Location = new System.Drawing.Point(32, 445);
             this.test1.Name = "test1";
             this.test1.Size = new System.Drawing.Size(63, 17);
             this.test1.TabIndex = 49;
@@ -288,7 +293,7 @@
             // test2
             // 
             this.test2.AutoSize = true;
-            this.test2.Location = new System.Drawing.Point(190, 434);
+            this.test2.Location = new System.Drawing.Point(105, 445);
             this.test2.Name = "test2";
             this.test2.Size = new System.Drawing.Size(63, 17);
             this.test2.TabIndex = 50;
@@ -318,11 +323,65 @@
             this.labelred.Text = "Enter all Fields!!";
             this.labelred.Visible = false;
             // 
+            // asscheckbox
+            // 
+            this.asscheckbox.AutoSize = true;
+            this.asscheckbox.Location = new System.Drawing.Point(241, 228);
+            this.asscheckbox.Name = "asscheckbox";
+            this.asscheckbox.Size = new System.Drawing.Size(72, 17);
+            this.asscheckbox.TabIndex = 53;
+            this.asscheckbox.Text = "WITH SS";
+            this.asscheckbox.UseVisualStyleBackColor = true;
+            // 
+            // vsscheckbox
+            // 
+            this.vsscheckbox.AutoSize = true;
+            this.vsscheckbox.Location = new System.Drawing.Point(241, 258);
+            this.vsscheckbox.Name = "vsscheckbox";
+            this.vsscheckbox.Size = new System.Drawing.Size(72, 17);
+            this.vsscheckbox.TabIndex = 54;
+            this.vsscheckbox.Text = "WITH SS";
+            this.vsscheckbox.UseVisualStyleBackColor = true;
+            // 
+            // hrccheckbox
+            // 
+            this.hrccheckbox.AutoSize = true;
+            this.hrccheckbox.Location = new System.Drawing.Point(190, 410);
+            this.hrccheckbox.Name = "hrccheckbox";
+            this.hrccheckbox.Size = new System.Drawing.Size(80, 17);
+            this.hrccheckbox.TabIndex = 55;
+            this.hrccheckbox.Text = "HRC FUSE";
+            this.hrccheckbox.UseVisualStyleBackColor = true;
+            // 
+            // fusecombobox
+            // 
+            this.fusecombobox.FormattingEnabled = true;
+            this.fusecombobox.Location = new System.Drawing.Point(276, 408);
+            this.fusecombobox.Name = "fusecombobox";
+            this.fusecombobox.Size = new System.Drawing.Size(68, 21);
+            this.fusecombobox.TabIndex = 56;
+            // 
+            // reactorcheckbox
+            // 
+            this.reactorcheckbox.AutoSize = true;
+            this.reactorcheckbox.Location = new System.Drawing.Point(190, 60);
+            this.reactorcheckbox.Name = "reactorcheckbox";
+            this.reactorcheckbox.Size = new System.Drawing.Size(64, 17);
+            this.reactorcheckbox.TabIndex = 57;
+            this.reactorcheckbox.Text = "Reactor";
+            this.reactorcheckbox.UseVisualStyleBackColor = true;
+            this.reactorcheckbox.Visible = false;
+            // 
             // Formfind
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(434, 654);
+            this.Controls.Add(this.reactorcheckbox);
+            this.Controls.Add(this.fusecombobox);
+            this.Controls.Add(this.hrccheckbox);
+            this.Controls.Add(this.vsscheckbox);
+            this.Controls.Add(this.asscheckbox);
             this.Controls.Add(this.labelred);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.test2);
@@ -386,5 +445,10 @@
         private System.Windows.Forms.CheckBox test2;
         private System.Windows.Forms.Button button1;
         private System.Windows.Forms.Label labelred;
+        private System.Windows.Forms.CheckBox asscheckbox;
+        private System.Windows.Forms.CheckBox vsscheckbox;
+        private System.Windows.Forms.CheckBox hrccheckbox;
+        private System.Windows.Forms.ComboBox fusecombobox;
+        private System.Windows.Forms.CheckBox reactorcheckbox;
     }
 }

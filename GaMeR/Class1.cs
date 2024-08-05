@@ -21,6 +21,7 @@ using IRibbonControl = ExcelDna.Integration.CustomUI.IRibbonControl;
 using IRibbonUI = ExcelDna.Integration.CustomUI.IRibbonUI;
 using System.Net.Http;
 using Newtonsoft.Json;
+using System.Threading.Tasks;
 
 namespace GaMeR
 {
@@ -57,7 +58,8 @@ namespace GaMeR
                   <button id=""auto"" label=""Read COSTING sheet"" getImage=""GetCustomImage"" size=""large"" onAction=""OnreadClick""/>
                   <button id=""layout"" label=""Automate GA sheet"" getImage=""GetCustomImage"" size=""large"" onAction=""OngaClick""/>
                   <separator id=""separator5""/>
-                  <button id=""about"" label=""About Add-in"" getImage=""GetCustomImage"" size=""large"" onAction=""OnaboutClick""/>
+                  <button id=""help"" label=""HELP"" getImage=""GetCustomImage"" size=""large"" onAction=""OnhelpClick""/>
+                  <button id=""about"" label=""About ME"" getImage=""GetCustomImage"" size=""large"" onAction=""OnaboutClick""/>
                 </group>
               </tab>
             </tabs>
@@ -168,6 +170,59 @@ namespace GaMeR
 
         }
 
+        public void OnhelpClick(IRibbonControl control)
+        {
+            Excel.Application excelApp = ExcelDnaUtil.Application as Excel.Application;
+            Excel.Workbook extWorkbook = null;
+
+            string savedPath = GetDatabaseFilePath();
+
+            if (string.IsNullOrEmpty(savedPath))
+            {
+                System.Windows.Forms.MessageBox.Show("No folder path selected. Please select a folder first.");
+                return;
+            }
+
+            string extFilePath = System.IO.Path.Combine(savedPath, "database.xlsx");
+            string workbookName = System.IO.Path.GetFileName(extFilePath);
+
+            excelApp.DisplayAlerts = false;  // Disable alerts
+            excelApp.ScreenUpdating = false;
+
+            foreach (Excel.Workbook wb in excelApp.Workbooks)
+            {
+                if (wb.Name.Equals(workbookName, StringComparison.OrdinalIgnoreCase))
+                {
+                    wb.Close(true);
+                    break;
+                    
+                }
+            }
+            if (extWorkbook == null)
+            {
+                extWorkbook = excelApp.Workbooks.Open(extFilePath, false, false);
+
+            }
+
+            Excel.Worksheet tempSheet = null;
+            foreach (Excel.Worksheet sheet in extWorkbook.Sheets)
+            {
+                if (sheet.Name == "HELP")
+                {
+                    tempSheet = sheet;
+                    break;
+                }
+            }
+            tempSheet.Activate();
+
+            excelApp.DisplayAlerts = true;  // Disable alerts
+            excelApp.ScreenUpdating = true;
+
+            Marshal.ReleaseComObject(tempSheet);
+            Marshal.ReleaseComObject(extWorkbook);
+
+        }
+
         public void OnaboutClick(IRibbonControl control)
         {
             MessageBox.Show(
@@ -186,7 +241,9 @@ namespace GaMeR
         {
             var excelApp = ExcelDnaUtil.Application as Excel.Application;
             Excel.Workbook costingWorkbook = null;
+            Excel.Workbook databaseWorkbook = null;
             Excel.Worksheet costingSheet = null;
+            List<string> errorMessages = new List<string>(); // List to store error messages
 
             try
             {
@@ -197,95 +254,117 @@ namespace GaMeR
                     MessageBox.Show("No folder path selected. Please select a folder first.");
                     return;
                 }
+
                 string extFilePath = System.IO.Path.Combine(savedPath, "database.xlsx");
 
                 using (OpenFileDialog openFileDialog = new OpenFileDialog())
                 {
                     openFileDialog.Filter = "Excel Files|*.xls;*.xlsx";
-                    openFileDialog.Title = "Select an Excel File";
+                    openFileDialog.Title = "Select Excel Files";
+                    openFileDialog.Multiselect = true; // Allow multiple file selection
 
                     if (openFileDialog.ShowDialog() == DialogResult.OK)
                     {
-                        // Step 2: Open the selected workbook
-                        excelApp.DisplayAlerts = false;
-                        costingWorkbook = excelApp.Workbooks.Open(openFileDialog.FileName,false);
+                        databaseWorkbook = excelApp.Workbooks.Open(
+                            extFilePath,
+                            UpdateLinks: 0, // 0 to not update external links
+                            ReadOnly: false,
+                            Editable: true
+                        );
 
-                        // Find the COSTING sheet
-                        foreach (Excel.Worksheet sheet in costingWorkbook.Sheets)
+                        HashSet<string> databaseValues = new HashSet<string>();
+
+                        // Scan the database workbook first
+                        foreach (Excel.Worksheet sheet in databaseWorkbook.Sheets)
                         {
-                            if (sheet.Name.Equals("COSTING", StringComparison.OrdinalIgnoreCase))
+                            Excel.Range usedRange = sheet.UsedRange;
+                            Excel.Range columnB = usedRange.Columns["B"];
+
+                            foreach (Excel.Range cell in columnB.Cells)
                             {
-                                costingSheet = sheet;
-                                break;
+                                if (cell.Row > 52) // Exclude first 52 rows
+                                {
+                                    string cellValue = cell.Value2?.ToString();
+                                    if (cell.Interior.Color != 49407 && !string.IsNullOrEmpty(cellValue))
+                                    {
+                                        databaseValues.Add(cellValue);
+                                    }
+                                }
                             }
                         }
+                        Excel.Worksheet newSheet = (Excel.Worksheet)databaseWorkbook.Sheets.Add();
+                        int newSheetRow = 2;
 
-                        if (costingSheet == null)
+
+                        // Process each selected file
+                        foreach (string fileName in openFileDialog.FileNames)
                         {
-                            MessageBox.Show("The selected workbook does not contain a COSTING sheet.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            return;
-                        }
-                    }
-                    else
-                    {
-                        return; // Exit if no file is selected
-                    }
-                }
-
-                Excel.Workbook databaseWorkbook = excelApp.Workbooks.Open(
-                    extFilePath,
-                    UpdateLinks: 0, // 0 to not update external links
-                    ReadOnly: false,
-                    Editable: true
-                );
-                
-                HashSet<string> databaseValues = new HashSet<string>();
-
-                foreach (Excel.Worksheet sheet in databaseWorkbook.Sheets)
-                {
-                    Excel.Range usedRange = sheet.UsedRange;
-                    Excel.Range columnB = usedRange.Columns["B"];
-
-                    foreach (Excel.Range cell in columnB.Cells)
-                    {
-                        if (cell.Row > 52) // Exclude first 52 rows
-                        {
-                            string cellValue = cell.Value2?.ToString();
-                            if (cell.Interior.Color != 49407 && !string.IsNullOrEmpty(cellValue))
+                            try
                             {
-                                databaseValues.Add(cellValue);
+                                // Open the current workbook
+                                excelApp.DisplayAlerts = false;
+                                costingWorkbook = excelApp.Workbooks.Open(fileName, false);
+
+                                // Find the COSTING sheet
+                                costingSheet = null;
+                                foreach (Excel.Worksheet sheet in costingWorkbook.Sheets)
+                                {
+                                    if (sheet.Name.Equals("COSTING", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        costingSheet = sheet;
+                                        break;
+                                    }
+                                }
+
+                                if (costingSheet == null)
+                                {
+                                    errorMessages.Add($"The workbook '{fileName}' does not contain a COSTING sheet.");
+                                    continue; // Skip this file
+                                }
+
+                                Excel.Range costingUsedRange = costingSheet.UsedRange;
+                                Excel.Range costingColumnB = costingUsedRange.Columns["B"];
+
+                                foreach (Excel.Range cell in costingColumnB.Cells)
+                                {
+                                    if (cell.Row > 52) // Exclude first 52 rows
+                                    {
+                                        string cellValue = cell.Value2?.ToString();
+                                        
+                                        if (cell.Interior.Color != 49407 && cell.Interior.Color != 15773696 && cell.Interior.Color != 65535 && !string.IsNullOrEmpty(cellValue) && !databaseValues.Contains(cellValue))
+                                        {
+                                            databaseValues.Add(cellValue);
+                                            Excel.Range entireRow = cell.EntireRow;
+                                            entireRow.Copy(newSheet.Rows[newSheetRow]);
+                                            newSheetRow++;
+                                        }
+                                    }
+                                }
                             }
+                            catch (Exception ex)
+                            {
+                                errorMessages.Add($"Error processing '{fileName}': {ex.Message}");
+                            }
+                            finally
+                            {
+                                if (costingWorkbook != null)
+                                {
+                                    costingWorkbook.Close(false);
+                                    costingWorkbook = null; // Reset the reference
+                                }
+                            }
+
+
                         }
+
+                        OrganizeDataByMake(newSheet);
                     }
+                    
                 }
-
-                // Step 4: Compare and copy rows from the COSTING sheet
-                Excel.Workbook newWorkbook = excelApp.Workbooks.Add();
-                Excel.Worksheet newSheet = newWorkbook.Sheets[1];
-                int newSheetRow = 2;
-
-                Excel.Range costingUsedRange = costingSheet.UsedRange;
-                Excel.Range costingColumnB = costingUsedRange.Columns["B"];
-
-                foreach (Excel.Range cell in costingColumnB.Cells)
-                {
-                    if (cell.Row > 52) // Exclude first 52 rows
-                    {
-                        string cellValue = cell.Value2?.ToString();
-                        if (cell.Interior.Color != 49407 && cell.Interior.Color != 15773696 && cell.Interior.Color != 65535 && !string.IsNullOrEmpty(cellValue) && !databaseValues.Contains(cellValue))
-                        {
-                            databaseValues.Add(cellValue);
-                            Excel.Range entireRow = cell.EntireRow;
-                            entireRow.Copy(newSheet.Rows[newSheetRow]);
-                            newSheetRow++;
-                        }
-                    }
-                }
-                
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                errorMessages.Add($"General error: {ex.Message}");
             }
             finally
             {
@@ -296,9 +375,194 @@ namespace GaMeR
                     costingWorkbook.Close(false);
                 }
             }
+
+            if (errorMessages.Any())
+            {
+                MessageBox.Show(string.Join("\n", errorMessages), "Processing Errors", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
+        private void OrganizeDataByMake(Excel.Worksheet sheet)
+        {
+            Dictionary<string, List<Excel.Range>> makeRows = new Dictionary<string, List<Excel.Range>>();
+            Excel.Range usedRange = sheet.UsedRange;
+
+            int lastRow = usedRange.Rows.Count;
+           
+            for (int rowIndex = 2; rowIndex <= lastRow; rowIndex++) // Assuming data starts from row 2
+            {
+                Excel.Range row = sheet.Rows[rowIndex];
+                string make = row.Cells[1, 4].Value2?.ToString() ?? ""; // Assuming make is in column C
+
+                if (!makeRows.ContainsKey(make))
+                {
+                    makeRows[make] = new List<Excel.Range>();
+                }
+
+                makeRows[make].Add(row);
+            }
+
+            if (makeRows.Count == 0)
+            {
+                return;
+            }
+
+            // Reinsert data grouped by make
+            int currentRow = lastRow + 2; // Start from the first row
+
+            foreach (var make in makeRows.Keys)
+            {
+                foreach (var row in makeRows[make])
+                {
+                    row.Copy(sheet.Rows[currentRow]);
+                    currentRow++;
+                }
+                // Add a blank row between different makes
+                currentRow++;
+            }
+            if (lastRow > 2) // Avoid deleting all rows if there's no data
+            {
+                Excel.Range rowsToDelete = sheet.Rows["2:" + (lastRow + 1)];
+                rowsToDelete.Delete(); // Delete all rows from row 2 to the last used row
+            }
+
+        }
+
         public void OnbelowClick(IRibbonControl control)
         {
+            var excelApp = ExcelDnaUtil.Application as Excel.Application;
+            Excel.Range selectedRange = excelApp.Selection as Excel.Range;
+            Excel.Worksheet currentsheet = selectedRange.Worksheet;
+            Excel.Range usedrange = currentsheet.UsedRange;
+
+            try
+            {
+                // Check if the selected range is valid
+                if (selectedRange == null || selectedRange.Cells.Count != 1)
+                {
+                    MessageBox.Show("Please select a single cell.");
+                    return;
+                }
+
+                // Check if the selected cell is in column B
+                if (selectedRange.Column != 2) // Column B is 2
+                {
+                    MessageBox.Show("Please select a cell in column B.");
+                    return;
+                }
+                excelApp.DisplayAlerts = false; 
+                string feederHeading = selectedRange.Value2?.ToString() ?? "";
+                Excel.Range cell = selectedRange.Offset[1, 0];
+                List<(string Description, string CatalogNumber, string Price, Excel.Range Row)> dataBelowSelectedRange = new List<(string, string, string, Excel.Range)>();
+
+                while (cell.Interior.Color != 49407 && cell.Interior.Color != 15773696 && cell.Interior.Color != 65535 && cell.Row <= excelApp.ActiveSheet.UsedRange.Rows.Count)
+                {
+                    string description = cell.Value2?.ToString() ?? "";
+                    string catalogNumber = cell.Offset[0, 1].Value2?.ToString() ?? "";
+                    string price = cell.Offset[0, 4].Value2?.ToString() ?? "";
+
+                    dataBelowSelectedRange.Add((description, catalogNumber, price, cell.EntireRow));
+                    cell = cell.Offset[1, 0];
+                }
+
+                Excel.Range ColumnBrange = usedrange.Columns["B"];
+                List<Excel.Range> columnBCells = new List<Excel.Range>();
+
+                // Collect column B cells in reverse order
+                foreach (Excel.Range cell2 in ColumnBrange.Cells)
+                {
+                    if (cell2.Row > selectedRange.Row)
+                    {
+                        columnBCells.Add(cell2);
+                    }
+                }
+                string feederqty = "1";
+                string panelqty = "1";
+                int lastRow = usedrange.Rows.Count;
+                // Sort columnBCells by row number in descending order
+                columnBCells = columnBCells.OrderByDescending(c => c.Row).ToList();
+                foreach (Excel.Range cells in columnBCells)
+                {
+                    if (cells.Row > selectedRange.Row)
+                    {
+                        Excel.Range cell2 = cells;
+                        string cellValue = cells.Value2?.ToString();
+
+                        if (cells.Interior.Color == 49407 && !string.IsNullOrEmpty(cellValue) && cellValue == feederHeading)
+                        {
+                            if (cells.Row == lastRow ||cells.Offset[1, 0].Interior.Color == 49407 || cells.Offset[1, 0].Interior.Color == 15773696 || cells.Offset[1, 0].Interior.Color == 65535)
+                            {
+                                List<Excel.Range> rowsToCopy = new List<Excel.Range>();
+
+                                try
+                                {
+                                    feederqty = cells.Offset[0, 1].Value2.ToString();
+                                    for (int row = cells.Row - 1; row >= 1; row--)
+                                    {
+                                        Excel.Range temp = usedrange.Cells[row, 2];
+                                        if (temp.Interior.Color == 15773696)
+                                        {
+                                            string sum = temp.Offset[0, 1].Value2.ToString();
+                                            panelqty = sum;
+                                            break;
+                                        }
+
+                                    }
+                                }
+                                catch
+                                {
+                                    MessageBox.Show("No Panel or Feeder Quantity found. So keeping the default Value");
+                                }
+
+                                if (dataBelowSelectedRange.Any())
+                                {
+                                    foreach (var data in dataBelowSelectedRange)
+                                    {
+                                        rowsToCopy.Add(data.Row);
+                                    }
+                                    for (int i = rowsToCopy.Count - 1; i >= 0; i--)
+                                    {
+                                        Excel.Range row = rowsToCopy[i];
+                                        row.Copy();
+                                        cells.Offset[1, -1].Insert(Excel.XlInsertShiftDirection.xlShiftDown);
+                                    }
+
+                                    for (int i = 1; i <= rowsToCopy.Count; i++)
+                                    {
+                                        if (feederqty != null)
+                                        {
+                                            cell2.Offset[i, 7].Value2 = feederqty;
+                                        }
+                                        if (panelqty != null)
+                                        {
+                                            cell2.Offset[i, 9].Value2 = panelqty;
+                                        }
+                                    }
+
+                                }
+                            }
+                            else if ((cells.Offset[1, 0].Interior.Color != 49407 || cells.Offset[1, 0].Interior.Color != 15773696 || cells.Offset[1, 0].Interior.Color != 65535) && !string.IsNullOrEmpty(cells.Offset[1, 0].Value2.ToString()))
+                            {
+                                //while (cell.Interior.Color != 49407 && cell.Interior.Color != 15773696 && cell.Interior.Color != 65535 && cell.Row <= excelApp.ActiveSheet.UsedRange.Rows.Count)
+                                //{
+                                    //string description = cell.Value2?.ToString() ?? "";
+                                    //string catalogNumber = cell.Offset[0, 1].Value2?.ToString() ?? "";
+                                   // string price = cell.Offset[0, 4].Value2?.ToString() ?? "";
+
+                                    //cell = cell.Offset[1, 0];
+                               // }
+                            }
+                         }
+                    }
+                }
+            }
+            catch (Exception ex) 
+            {
+                MessageBox.Show(ex.Message);
+            }
+            finally 
+            {
+                excelApp.DisplayAlerts = true;
+            }
 
         }
         public void OnfeederClick(IRibbonControl control)
@@ -1750,7 +2014,7 @@ namespace GaMeR
                 for (int row = usedRange.Rows.Count; row >= 1; row--)
                 {
                     Excel.Range cell = currentSheet.Cells[row, 2]; // Column B is index 2
-                    if (cell.Interior.Color == 49407 && !string.IsNullOrEmpty(cell.Value2?.ToString()))
+                    if (cell.Interior.Color == 49407 && !string.IsNullOrEmpty(cell.Value2?.ToString()) && (cell.Offset[1,0].Interior.Color == 49407 || cell.Offset[1, 0].Interior.Color == 15773696 || string.IsNullOrEmpty(cell.Offset[1,0].Value2?.ToString())))
                     {
                         orangeCells.Add(cell);
                     }
@@ -1758,7 +2022,8 @@ namespace GaMeR
 
                 foreach (var orangeCell in orangeCells)
                 {
-                    Formfind form = new Formfind(orangeCell.Value2.ToString(), orangeCell);
+                    Formfind form = new Formfind("automate643", orangeCell);
+                    
                 }
 
             }

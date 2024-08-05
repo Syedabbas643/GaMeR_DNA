@@ -20,6 +20,8 @@ using System.Xml.Linq;
 using System.Text.RegularExpressions;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.Button;
 using System.Runtime.InteropServices;
+using Newtonsoft.Json.Linq;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.ProgressBar;
 
 namespace GaMeR
 {
@@ -69,7 +71,7 @@ namespace GaMeR
                 Excel.Application excelApp = ExcelDnaUtil.Application as Excel.Application;
 
 
-                string cellValue = auto;
+                string cellValue = SelectedRange.Value2.ToString();
 
                 string name = cellValue.Replace(",", " ").ToLower();
 
@@ -87,6 +89,10 @@ namespace GaMeR
                 bool containsCOS = name.Contains("cos");
                 bool containsSDFU = name.Contains("sdfu");
                 bool containsELC = name.Contains("enclosure");
+                bool containsAMSS = name.Contains("amss");
+                bool containsVMSS = name.Contains("vmss");
+                bool containsHRC = name.Contains("hrc");
+                bool containsKVAR = name.Contains("kvar");
 
                 int amps1 = 0;
 
@@ -176,6 +182,26 @@ namespace GaMeR
                 elrbox.Checked = containsELR;
                 spdbox.Checked = containsSPD;
                 mfmcheckbox.Checked = containsMFM;
+                hrccheckbox.Checked = containsHRC;
+                if (containsKVAR)
+                {
+                    string[] parts = name.Split(new string[] { "kvar" }, StringSplitOptions.None);
+                    string beforeMCB = parts.Length > 0 ? parts[0].Trim() : string.Empty;
+                    string result = beforeMCB.ToUpper();
+                    label1.Text = $"{result}KVAR:";
+                    reactorcheckbox.Visible = true;
+                    reactorcheckbox.Checked = true;
+                }
+                if (containsAMSS)
+                {
+                    ambox.Checked = containsAMSS;
+                    asscheckbox.Checked = containsAMSS;
+                }
+                if (containsVMSS) 
+                {
+                    vmbox.Checked = containsVMSS;
+                    vsscheckbox.Checked = containsVMSS;
+                }
 
                 string getmfmcatno = ConfigurationManager.AppSettings["MfmCatno"];
                 if (getmfmcatno != null)
@@ -186,6 +212,23 @@ namespace GaMeR
                 ctamps.Items.AddRange(new string[] { "CLASS 1", "CLASS 0.5" });
 
                 ctva.Items.AddRange(new string[] { "5VA", "15VA" });
+
+                fusecombobox.Items.AddRange(new string[] { "Control","6","8","10","16","20","25","32","40","50","63","80","100","125","160","200", "250","315","400","500","630","800" });
+
+                Match hrcTypeMatch = Regex.Match(name, @"hrc(\d+)", RegexOptions.IgnoreCase);
+                if (hrcTypeMatch.Success)
+                {
+                    fusecombobox.SelectedItem = hrcTypeMatch.Groups[1].Value;
+                    if (fusecombobox.SelectedItem == null)
+                    {
+                        fusecombobox.SelectedIndex = 0;
+                    }
+                }
+                else
+                {
+                    fusecombobox.SelectedIndex = 0;
+                }
+                                
 
                 string getctamps = ConfigurationManager.AppSettings["ctamps"];
                 if (getctamps != null)
@@ -209,6 +252,10 @@ namespace GaMeR
                 if (label1.Text == "PANEL UTILITY" || label1.Text == "ENCLOSURE AND BUSBAR + EARTH" || label1.Text.Contains("MCB"))
                 {
 
+                    Run_Clickalt(SelectedRange, EventArgs.Empty);
+                }
+                else if(auto == "automate643")
+                {
                     Run_Clickalt(SelectedRange, EventArgs.Empty);
                 }
                 else
@@ -355,8 +402,12 @@ namespace GaMeR
                 bool containsMFM = mfmcheckbox.Checked;
                 bool containsAM = ambox.Checked;
                 bool containsVM = vmbox.Checked;
+                bool containsAMSS = asscheckbox.Checked;
+                bool containsVMSS = vsscheckbox.Checked;
                 bool containsELR = elrbox.Checked;
                 bool containsSPD = spdbox.Checked;
+                bool containsHRC = hrccheckbox.Checked;
+                bool containsREAC = reactorcheckbox.Checked;
                 bool checkBoxSpreaders = false;
                 bool checkBoxExtendedROM = false;
                 bool checkBoxAuxilaryContacts = false;
@@ -371,10 +422,11 @@ namespace GaMeR
                 bool testbox1 = test1.Checked;
                 bool testbox2 = test2.Checked;
                 string acctype = comboBox1.SelectedItem?.ToString().ToLower();
-                string header = label1.Text.ToString();
+                string header = selectedRange.Value2.ToString().ToUpper();
                 string mfmcatno = null;
                 string ctampsvalue = null;
                 string ctvavalue = null;
+                string hrcamps = null;
 
 
                 Excel.Range accUsedRange = null;
@@ -387,6 +439,7 @@ namespace GaMeR
                 Excel.Range mfmUsedRange = null;
                 Excel.Range cosUsedRange = null;
                 Excel.Range sdfuUsedRange = null;
+                Excel.Range apfcUsedRange = null;
 
                 if (containsMFM)
                 {
@@ -402,6 +455,11 @@ namespace GaMeR
                     config.AppSettings.Settings.Add("ctva", ctvavalue);
                     config.Save(ConfigurationSaveMode.Modified);
                     ConfigurationManager.RefreshSection("appSettings");
+                }
+
+                if (containsHRC)
+                {
+                    hrcamps = fusecombobox.SelectedItem?.ToString();
                 }
 
                 if (header.Contains("ACB"))
@@ -1375,6 +1433,76 @@ namespace GaMeR
                     }
                 }
 
+                if (header.Contains("KVAR"))
+                {
+                    Excel.Worksheet apfcSheet = extWorkbook.Sheets["APFC"];
+                    apfcUsedRange = GetUsedRange(apfcSheet, ref apfcUsedRange);
+
+                    string kvar = "";
+
+                    Match kvarMatch = Regex.Match(header, @"\d+\s*KVAR", RegexOptions.IgnoreCase);
+                    if (kvarMatch.Success)
+                    {
+                        kvar = kvarMatch.Value;
+                    }
+
+                    foreach (Excel.Range row in apfcUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                        string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                        if (cellValue == kvar && (cellValue2 == "CO" || cellValue2 == "CP"))
+                        {
+                            rowsToCopy.Add(row);
+
+                        }
+                    }
+
+                    if (containsREAC)
+                    {
+                        if (bartype == "CU")
+                        {
+                            foreach (Excel.Range row in apfcUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                                if (cellValue == kvar && cellValue2 == "CUR")
+                                {
+                                    rowsToCopy.Add(row);
+
+                                }
+                            }
+                        }
+                        else if (bartype == "AL")
+                        {
+                            foreach (Excel.Range row in apfcUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                                if (cellValue == kvar && cellValue2 == "ALR")
+                                {
+                                    rowsToCopy.Add(row);
+
+                                }
+                            }
+                        }
+                    }
+
+                    foreach (Excel.Range row in apfcUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+
+                        if (cellValue == "APFC ACC")
+                        {
+                            rowsToCopy.Add(row);
+
+                        }
+                    }
+
+                }
+
                 if (containsMFM)
                 {
                     Excel.Worksheet mfmSheet = extWorkbook.Sheets["MFM"];
@@ -1436,12 +1564,111 @@ namespace GaMeR
                     }
                 }
 
+                if (containsRYB || containsRGA || containsMFM)
+                {
+                    string count = "1";
+                    if (containsRYB && containsRGA && containsMFM) { count = "4"; }
+                    else if (containsRYB && containsRGA) { count = "4"; }
+                    else if (containsRGA && containsMFM) { count = "4"; }
+                    else if (containsRYB && containsMFM) { count = "3"; }
+                    else if (containsRYB) { count = "3"; }
+                    else if (containsMFM) { count = "3"; }
+                    else if (containsRGA) { count = "1"; }
+
+                    if (containsHRC && hrcamps == "Control")
+                    {
+                        foreach (Excel.Range row in mainUsedRange.Rows)
+                        {
+                            string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                            if (cellValue == "hrc6")
+                            {
+                                row.Cells[1, 5].Value2 = count;
+                                rowsToCopy.Add(row);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        foreach (Excel.Range row in mainUsedRange.Rows)
+                        {
+                            string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                            if (cellValue == "mcb")
+                            {
+                                row.Cells[1, 5].Value2 = count;
+                                rowsToCopy.Add(row);
+                            }
+                        }
+                    }
+                }
+
+                if (containsHRC)
+                {
+                    if (hrcamps != "Control")
+                    {
+                        Excel.Worksheet sdfuSheet = extWorkbook.Sheets["SDFU"];
+                        sdfuUsedRange = GetUsedRange(sdfuSheet, ref sdfuUsedRange);
+
+                        string HRCamps = $"{hrcamps}A";
+                        foreach (Excel.Range row in sdfuUsedRange.Rows)
+                        {
+                            string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                            string cellValue2 = row.Cells[1, 29].Value2?.ToString() ?? "";
+                            if (cellValue == "HRC" && cellValue2 == HRCamps)
+                            {
+                                rowsToCopy.Add(row);
+                            }
+                        }
+
+                        int HRCampsint = int.Parse(hrcamps);
+                        string basetype = null;
+
+                        if (HRCampsint > 250)
+                        {
+                            basetype = "HB 800";
+                        }
+                        else if (HRCampsint > 160)
+                        {
+                            basetype = "HB 250";
+                        }
+                        else if (HRCampsint > 63)
+                        {
+                            basetype = "HB 160";
+                        }
+                        else
+                        {
+                            basetype = "HB 63";
+                        }
+
+                        foreach (Excel.Range row in sdfuUsedRange.Rows)
+                        {
+                            string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                            string cellValue2 = row.Cells[1, 29].Value2?.ToString() ?? "";
+                            if (cellValue == "HRC" && cellValue2 == basetype)
+                            {
+                                rowsToCopy.Add(row);
+                            }
+                        }
+
+                    }
+                }
+
                 if (containsAM)
                 {
                     foreach (Excel.Range row in mainUsedRange.Rows)
                     {
                         string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
                         if (cellValue == "am")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                }
+                if (containsAMSS)
+                {
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "ass")
                         {
                             rowsToCopy.Add(row);
                         }
@@ -1454,6 +1681,17 @@ namespace GaMeR
                     {
                         string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
                         if (cellValue == "vm")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                }
+                if (containsVMSS)
+                {
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "vss")
                         {
                             rowsToCopy.Add(row);
                         }
