@@ -20,8 +20,8 @@ using Microsoft.Office.Core;
 using IRibbonControl = ExcelDna.Integration.CustomUI.IRibbonControl;
 using IRibbonUI = ExcelDna.Integration.CustomUI.IRibbonUI;
 using System.Net.Http;
-using Newtonsoft.Json;
 using System.Threading.Tasks;
+using System.Runtime.Serialization.Json;
 
 namespace GaMeR
 {
@@ -109,7 +109,7 @@ namespace GaMeR
             try
             {
                 _authorizationCheckTimer = new Timer();
-                _authorizationCheckTimer.Interval = 600000; // 10 minutes in milliseconds
+                _authorizationCheckTimer.Interval = 1200000; // 20 minutes in milliseconds
                 _authorizationCheckTimer.Tick += async (sender, args) =>
                 {
                     using (HttpClient client = new HttpClient())
@@ -120,29 +120,33 @@ namespace GaMeR
                             if (response.IsSuccessStatusCode)
                             {
                                 string responseBody = await response.Content.ReadAsStringAsync();
-                                bool isAuthorized = JsonConvert.DeserializeObject<bool>(responseBody);
+                                using (var ms = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)))
+                                {
+                                    var serializer = new DataContractJsonSerializer(typeof(bool));
+                                    bool isAuthorized = (bool)serializer.ReadObject(ms);
 
-                                if (isAuthorized)
-                                {
-                                    _authorizationCheckTimer.Stop();
-                                }
-                                else
-                                {
-                                    ExcelAsyncUtil.QueueAsMacro(() =>
+                                    if (isAuthorized)
                                     {
-                                        try
+                                        _authorizationCheckTimer.Stop();
+                                    }
+                                    else
+                                    {
+                                        ExcelAsyncUtil.QueueAsMacro(() =>
                                         {
-                                            Excel.Application excelApp = ExcelDnaUtil.Application as Excel.Application;
-                                            excelApp.DisplayAlerts = false; // Suppress any save changes dialogs
-                                            excelApp.Quit(); // Quit the application
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Console.WriteLine("Error closing Excel: " + ex.Message);
-                                        }
-                                    });
+                                            try
+                                            {
+                                                Excel.Application excelApp = ExcelDnaUtil.Application as Excel.Application;
+                                                excelApp.DisplayAlerts = false; // Suppress any save changes dialogs
+                                                excelApp.Quit(); // Quit the application
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                Console.WriteLine("Error closing Excel: " + ex.Message);
+                                            }
+                                        });
 
-                                    Environment.Exit(0);
+                                        Environment.Exit(0);
+                                    }
                                 }
 
                             }

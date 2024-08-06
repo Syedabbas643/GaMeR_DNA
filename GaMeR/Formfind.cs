@@ -20,8 +20,8 @@ using System.Xml.Linq;
 using System.Text.RegularExpressions;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.Button;
 using System.Runtime.InteropServices;
-using Newtonsoft.Json.Linq;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.ProgressBar;
+using System.Security.AccessControl;
 
 namespace GaMeR
 {
@@ -93,6 +93,7 @@ namespace GaMeR
                 bool containsVMSS = name.Contains("vmss");
                 bool containsHRC = name.Contains("hrc");
                 bool containsKVAR = name.Contains("kvar");
+                bool containsDOL = name.Contains("dol");
 
                 int amps1 = 0;
 
@@ -132,12 +133,23 @@ namespace GaMeR
                     string result = beforeMCB.ToUpper();
                     label1.Text = $"{result} MCB:";
                 }
-                else if (containsMCCB)
+                else if (containsMCCB || containsDOL)
                 {
-                    string[] parts = name.Split(new string[] { "mccb" }, StringSplitOptions.None);
-                    string beforeMCCB = parts.Length > 0 ? parts[0].Trim() : string.Empty;
-                    string result = beforeMCCB.ToUpper();
-                    label1.Text = $"{result} MCCB:";
+                    if (containsMCCB)
+                    {
+                        string[] parts = name.Split(new string[] { "mccb" }, StringSplitOptions.None);
+                        string beforeMCCB = parts.Length > 0 ? parts[0].Trim() : string.Empty;
+                        string result = beforeMCCB.ToUpper();
+                        label1.Text = $"{result} MCCB:";
+                    }
+                    else if (containsDOL)
+                    {
+                        string[] parts = name.Split(new string[] { "dol" }, StringSplitOptions.None);
+                        string beforeMCB = parts.Length > 0 ? parts[0].Trim() : string.Empty;
+                        string result = beforeMCB.ToUpper();
+                        label1.Text = $"{result} DOL:";
+                    }
+                    
                     comboBox1.Items.AddRange(new string[] { "AUTO", "DZ1", "DU", "DN0", "DN1", "DN2", "DN3" });
                     comboBox1.SelectedIndex = 0;
                     checkedListBox1.Items.Add("Spreaders");
@@ -440,6 +452,8 @@ namespace GaMeR
                 Excel.Range cosUsedRange = null;
                 Excel.Range sdfuUsedRange = null;
                 Excel.Range apfcUsedRange = null;
+                Excel.Range dolUsedRange = null;
+                Excel.Range concUsedRange = null;
 
                 if (containsMFM)
                 {
@@ -492,7 +506,7 @@ namespace GaMeR
                         }
                     }
                 }
-                if (header.Contains("MCCB"))
+                if (header.Contains("MCCB") || header.Contains("DOL"))
                 {
                     for (int i = 0; i < checkedListBox1.Items.Count; i++)
                     {
@@ -628,6 +642,470 @@ namespace GaMeR
                         }
 
                     }
+                }
+                else if (header.Contains("DOL"))
+                {
+                    Excel.Worksheet dolSheet = extWorkbook.Sheets["DOL"];
+                    dolUsedRange = GetUsedRange(dolSheet, ref dolUsedRange);
+                    Excel.Worksheet concSheet = extWorkbook.Sheets["CONTACTOR"];
+                    concUsedRange = GetUsedRange(concSheet, ref concUsedRange);
+
+                    double hp = 0;
+                    double kw = 0;
+                    if (header.Contains("HP"))
+                    {
+                        // Match a number (with an optional decimal point) before "HP"
+                        Match hpMatch = Regex.Match(header, @"(\d+(\.\d+)?)\s*HP", RegexOptions.IgnoreCase);
+                        if (hpMatch.Success)
+                        {
+                            // Convert the matched string to an integer
+                            double.TryParse(hpMatch.Groups[1].Value, out double hpValue);
+                            hp = hpValue; // Optionally round or convert to int
+                        }
+                    }
+                    else if (header.Contains("KW"))
+                    {
+                        Match kwMatch = Regex.Match(header, @"(\d+(\.\d+)?)\s*KW", RegexOptions.IgnoreCase);
+                        if (kwMatch.Success)
+                        {
+                            // Convert the matched string to an integer
+                            double.TryParse(kwMatch.Groups[1].Value, out double kwValue);
+                            kw = kwValue; // Optionally round or convert to int
+                        }
+                    }
+
+                    if (header.Contains("MCCB"))
+                    {
+                        string breakingCapacity = "36KA";
+                        string poleType = "TPN";
+                        string mtxType = "";
+                        string conctype = "";
+
+                        if (hp > 0)
+                        {
+                            foreach (Excel.Range row in dolUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 1].Value2?.ToString() ?? "";
+                                if (cellValue == hp.ToString())
+                                {
+                                    if (amps == "")
+                                    {
+                                        string ampsrating2 = row.Cells[1, 9].Value2?.ToString() ?? "";
+                                        amps = $"{ampsrating2}A";
+                                    }
+                                    conctype = row.Cells[1, 4].Value2?.ToString() ?? "";
+                                }
+                            }
+                        }
+                        else if (kw > 0)
+                        {
+                            foreach (Excel.Range row in dolUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 2].Value2?.ToString() ?? "";
+                                if (cellValue == kw.ToString())
+                                {
+                                    if (amps == "")
+                                    {
+                                        string ampsrating2 = row.Cells[1, 9].Value2?.ToString() ?? "";
+                                        amps = $"{ampsrating2}A";
+                                    }
+                                    
+                                    conctype = row.Cells[1, 4].Value2?.ToString() ?? "";
+                                }
+                            }
+                        }
+
+                        // Extract Breaking Capacity
+                        Match breakingCapacityMatch = Regex.Match(header, @"\d+ ?KA", RegexOptions.IgnoreCase);
+                        if (breakingCapacityMatch.Success)
+                        {
+                            breakingCapacity = breakingCapacityMatch.Value;
+                        }
+
+                        // Extract Pole Type (FP or TP)
+                        Match poleTypeMatch = Regex.Match(header, @"[SDTF1234]P[N]?", RegexOptions.IgnoreCase);
+                        if (poleTypeMatch.Success)
+                        {
+                            switch (poleTypeMatch.Value)
+                            {
+                                case "TPN":
+                                    poleType = "TPN";
+                                    break;
+                                case "TP":
+                                    poleType = "TPN";
+                                    break;
+                                case "3P":
+                                    poleType = "TPN";
+                                    break;
+                                case "FP":
+                                    poleType = "4P";
+                                    break;
+                                case "4P":
+                                    poleType = "4P";
+                                    break;
+                            }
+                        }
+
+                        // Extract MTX Type
+                        Match mtxTypeMatch = Regex.Match(header, @"MTX \d+\.\d", RegexOptions.IgnoreCase);
+                        if (mtxTypeMatch.Success)
+                        {
+                            mtxType = mtxTypeMatch.Value.Trim();
+                        }
+
+                        if (mtxType != "")
+                        {
+                            if (breakingCapacity == "18KA")
+                            {
+                                breakingCapacity = "36KA";
+                            }
+                            else if (breakingCapacity == "25KA")
+                            {
+                                breakingCapacity = "36KA";
+                            }
+                        }
+
+                        if (breakingCapacity == "18KA")
+                        {
+                            Excel.Worksheet onekSheet = extWorkbook.Sheets["MCCB 18KA"];
+                            onekUsedRange = GetUsedRange(onekSheet, ref onekUsedRange);
+
+                            foreach (Excel.Range row in onekUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 27].Value2?.ToString().ToUpper() ?? "";
+                                string cellValue2 = row.Cells[1, 28].Value2?.ToString().ToUpper() ?? "";
+                                if (cellValue == amps && cellValue2 == poleType)
+                                {
+                                    if (acctype == "auto")
+                                    {
+                                        acctype = row.Cells[1, 29].Value2.ToString();
+                                    }
+
+                                    rowsToCopy.Add(row);
+                                }
+                            }
+                        }
+                        else if (breakingCapacity == "25KA")
+                        {
+                            Excel.Worksheet twokSheet = extWorkbook.Sheets["MCCB 25KA"];
+                            twokUsedRange = GetUsedRange(twokSheet, ref twokUsedRange);
+
+                            foreach (Excel.Range row in twokUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 27].Value2?.ToString().ToUpper() ?? "";
+                                if (cellValue == $"{amps} {poleType}")
+                                {
+                                    if (acctype == "auto")
+                                    {
+                                        acctype = row.Cells[1, 28].Value2.ToString();
+                                    }
+
+                                    rowsToCopy.Add(row);
+                                }
+                            }
+                        }
+                        else if (breakingCapacity == "36KA")
+                        {
+                            Excel.Worksheet threekSheet = extWorkbook.Sheets["MCCB 36KA"];
+                            threekUsedRange = GetUsedRange(threekSheet, ref threekUsedRange);
+
+                            foreach (Excel.Range row in threekUsedRange.Rows)
+                            {
+                                string cellValue1 = row.Cells[1, 27].Value2?.ToString().ToUpper() ?? "";
+                                string cellValue2 = row.Cells[1, 28].Value2?.ToString().ToUpper() ?? "";
+                                string cellValue3 = row.Cells[1, 29].Value2?.ToString().ToUpper() ?? "";
+
+                                if (mtxType != "")
+                                {
+                                    if (cellValue1 == amps && cellValue2 == poleType && cellValue3 == mtxType)
+                                    {
+                                        if (acctype == "auto")
+                                        {
+                                            acctype = row.Cells[1, 30].Value2.ToString();
+                                        }
+
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+                                else
+                                {
+                                    if (cellValue1 == amps && cellValue2 == poleType && cellValue3 == "")
+                                    {
+                                        if (acctype == "auto")
+                                        {
+                                            acctype = row.Cells[1, 30].Value2.ToString();
+                                        }
+
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+                            }
+                        }
+                        else if (breakingCapacity == "50KA")
+                        {
+                            Excel.Worksheet fivekSheet = extWorkbook.Sheets["MCCB 50KA"];
+                            fivekUsedRange = GetUsedRange(fivekSheet, ref fivekUsedRange);
+
+                            foreach (Excel.Range row in fivekUsedRange.Rows)
+                            {
+                                string cellValue1 = row.Cells[1, 27].Value2?.ToString().ToUpper() ?? "";
+                                string cellValue2 = row.Cells[1, 28].Value2?.ToString().ToUpper() ?? "";
+                                string cellValue3 = row.Cells[1, 29].Value2?.ToString().ToUpper() ?? "";
+
+                                if (mtxType != "")
+                                {
+                                    if (cellValue1 == amps && cellValue2 == poleType && cellValue3 == mtxType)
+                                    {
+                                        if (acctype == "auto")
+                                        {
+                                            acctype = row.Cells[1, 30].Value2.ToString();
+                                        }
+
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+                                else
+                                {
+                                    if (cellValue1 == amps && cellValue2 == poleType && cellValue3 == "")
+                                    {
+                                        if (acctype == "auto")
+                                        {
+                                            acctype = row.Cells[1, 30].Value2.ToString();
+                                        }
+
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+
+                            }
+                        }
+                        else if (breakingCapacity == "70KA")
+                        {
+                            Excel.Worksheet sevenkSheet = extWorkbook.Sheets["MCCB 70KA"];
+                            sevenkUsedRange = GetUsedRange(sevenkSheet, ref sevenkUsedRange);
+
+                            foreach (Excel.Range row in sevenkUsedRange.Rows)
+                            {
+                                string cellValue1 = row.Cells[1, 27].Value2?.ToString().ToUpper() ?? "";
+                                string cellValue2 = row.Cells[1, 28].Value2?.ToString().ToUpper() ?? "";
+                                string cellValue3 = row.Cells[1, 29].Value2?.ToString().ToUpper() ?? "";
+
+                                if (mtxType != "")
+                                {
+                                    if (cellValue1 == amps && cellValue2 == poleType && cellValue3 == mtxType)
+                                    {
+                                        if (acctype == "auto")
+                                        {
+                                            acctype = row.Cells[1, 30].Value2.ToString();
+                                        }
+
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+                                else
+                                {
+                                    if (cellValue1 == amps && cellValue2 == poleType && cellValue3 == "")
+                                    {
+                                        if (acctype == "auto")
+                                        {
+                                            acctype = row.Cells[1, 30].Value2.ToString();
+                                        }
+
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+
+                            }
+                        }
+
+                        if (acctype != null)
+                        {
+                            if (checkBoxSpreaders)
+                            {
+                                foreach (Excel.Range row in accUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+
+                                    if (amps == "400A")
+                                    {
+                                        if (cellValue == $"{acctype.ToLower()} spr400 {poleType.ToLower()}")
+                                        {
+                                            rowsToCopy.Add(row);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (cellValue == $"{acctype.ToLower()} spr {poleType.ToLower()}")
+                                        {
+                                            rowsToCopy.Add(row);
+                                        }
+                                    }
+
+                                }
+                            }
+
+                            if (checkBoxExtendedROM)
+                            {
+                                foreach (Excel.Range row in accUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                                    if (cellValue == $"{acctype.ToLower()} rom")
+                                    {
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+                            }
+
+                            if (checkBoxAuxilaryContacts)
+                            {
+                                foreach (Excel.Range row in accUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                                    if (cellValue == $"{acctype.ToLower()} aux")
+                                    {
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+                            }
+
+                            if (checkBoxShuntRelease)
+                            {
+                                foreach (Excel.Range row in accUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                                    if (cellValue == $"{acctype.ToLower()} shunt")
+                                    {
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+                            }
+
+                            if (containsAddmccb)
+                            {
+                                foreach (Excel.Range row in accUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                                    if (cellValue == $"{acctype.ToLower()} add")
+                                    {
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+                            }
+                        }
+
+                        foreach (Excel.Range row in concUsedRange.Rows)
+                        {
+                            string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+
+                            if (cellValue == conctype)
+                            {
+                                rowsToCopy.Add(row);
+                            }
+                        }
+
+                        foreach (Excel.Range row in concUsedRange.Rows)
+                        {
+                            string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+
+                            if (cellValue == "DOL ACC")
+                            {
+                                rowsToCopy.Add(row);
+                            }
+                        }
+
+                    }
+                    else if (header.Contains("MPCB"))
+                    {
+
+                    }
+                    else
+                    {
+                        Excel.Worksheet sdfuSheet = extWorkbook.Sheets["SDFU"];
+                        sdfuUsedRange = GetUsedRange(sdfuSheet, ref sdfuUsedRange);
+
+                        string hrc = "";
+                        
+                        string conctype = "";
+                        string poletype = "TPN";
+
+                        if (hp > 0)
+                        {
+                            foreach (Excel.Range row in dolUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 1].Value2?.ToString() ?? "";
+                                if (cellValue == hp.ToString())
+                                {
+                                    string ampsrating2 = row.Cells[1, 7].Value2?.ToString() ?? "";
+                                    amps = $"{ampsrating2}A";
+                                    string fuserating2 = row.Cells[1, 6].Value2?.ToString() ?? "";
+                                    hrc = $"{fuserating2}A";
+                                    conctype= row.Cells[1, 4].Value2?.ToString() ?? "";
+                                }
+                            }
+                        }
+                        else if (kw > 0)
+                        {
+                            foreach (Excel.Range row in dolUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 2].Value2?.ToString() ?? "";
+                                if (cellValue == kw.ToString())
+                                {
+                                    string ampsrating2 = row.Cells[1, 7].Value2?.ToString() ?? "";
+                                    amps = $"{ampsrating2}A";
+                                    string fuserating2 = row.Cells[1, 6].Value2?.ToString() ?? "";
+                                    hrc = $"{fuserating2}A";
+                                    conctype = row.Cells[1, 4].Value2?.ToString() ?? "";
+                                }
+                            }
+                        }
+
+                        foreach (Excel.Range row in sdfuUsedRange.Rows)
+                        {
+                            string cellValue = row.Cells[1, 27].Value2?.ToString().ToUpper() ?? "";
+                            string cellValue2 = row.Cells[1, 28].Value2?.ToString().ToUpper() ?? "";
+                            string cellValue3 = row.Cells[1, 29].Value2?.ToString().ToUpper() ?? "";
+
+                            if (cellValue == "SDFU" && cellValue2 == amps && cellValue3 == poletype)
+                            {
+                                rowsToCopy.Add(row);
+                            }
+
+                        }
+
+                        if (hrc != "")
+                        {
+                            foreach (Excel.Range row in sdfuUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                string cellValue2 = row.Cells[1, 29].Value2?.ToString() ?? "";
+                                if (cellValue == "HRC" && cellValue2 == hrc)
+                                {
+                                    rowsToCopy.Add(row);
+                                }
+                            }
+                        }
+
+                        foreach (Excel.Range row in concUsedRange.Rows)
+                        {
+                            string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                            
+                            if (cellValue == conctype)
+                            {
+                                rowsToCopy.Add(row);
+                            }
+                        }
+
+                        foreach (Excel.Range row in concUsedRange.Rows)
+                        {
+                            string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+
+                            if (cellValue == "DOL ACC")
+                            {
+                                rowsToCopy.Add(row);
+                            }
+                        }
+                    }
+
                 }
                 else if (header.Contains("SDFU"))
                 {
@@ -1748,14 +2226,13 @@ namespace GaMeR
 
                 //inserting busbar interconnection and consumebles
 
-                if (header.Contains("MCCB") || header.Contains("COS") || header.Contains("SDFU"))
+                if (header.Contains("MCCB") || header.Contains("COS") || header.Contains("SDFU") || header.Contains("DOL"))
                 {
                     int amps1 = 0;
 
-                    Match ampsMatch1 = Regex.Match(header, @"(\d+) ?A", RegexOptions.IgnoreCase);
-                    if (ampsMatch1.Success)
+                    if (amps != "")
                     {
-                        amps1 = int.Parse(ampsMatch1.Groups[1].Value);
+                        amps1 = int.Parse(amps.Replace("A", ""));
                     }
 
                     if (amps1 != 0 && amps1 <= 63)
