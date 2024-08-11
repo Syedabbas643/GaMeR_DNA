@@ -11,11 +11,13 @@
     <None Remove="Images\auto2.png" />
     <None Remove="Images\bom2.png" />
     <None Remove="Images\find2.png" />
+    <None Remove="Images\find3.png" />
     <None Remove="Images\help.png" />
     <None Remove="Images\layout.png" />
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Images\find3.png" />
     <EmbeddedResource Include="Images\help.png" />
   </ItemGroup>
 

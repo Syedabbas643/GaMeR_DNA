@@ -89,11 +89,14 @@ namespace GaMeR
                 bool containsCOS = name.Contains("cos");
                 bool containsSDFU = name.Contains("sdfu");
                 bool containsELC = name.Contains("enclosure");
-                bool containsAMSS = name.Contains("amss");
-                bool containsVMSS = name.Contains("vmss");
+                bool containsAMSS = name.Contains("ams");
+                bool containsVMSS = name.Contains("vms");
                 bool containsHRC = name.Contains("hrc");
                 bool containsKVAR = name.Contains("kvar");
                 bool containsDOL = name.Contains("dol");
+                bool containsSDS = name.Contains("sds");
+                bool containsSS = name.Contains("ss");
+                bool containsAPFCR = name.Contains("apfcr");
 
                 int amps1 = 0;
 
@@ -133,22 +136,38 @@ namespace GaMeR
                     string result = beforeMCB.ToUpper();
                     label1.Text = $"{result} MCB:";
                 }
-                else if (containsMCCB || containsDOL)
+                else if (containsMCCB || containsDOL || containsSDS)
                 {
-                    if (containsMCCB)
+                    if (containsDOL)
+                    {
+                        string[] parts = name.Split(new string[] { "dol" }, StringSplitOptions.None);
+                        string beforeMCB = parts.Length > 0 ? parts[0].Trim() : string.Empty;
+                        string result = beforeMCB.ToUpper();
+                        label1.Text = $"{result} DOL:";
+                        conclabel.Visible = true ;
+                        conctypebox.Visible = true ;
+                        conctypebox.Items.AddRange(new string[] { "MO", "MNX" });
+                        conctypebox.SelectedIndex = 0 ;
+                    }
+                    else if (containsSDS)
+                    {
+                        string[] parts = name.Split(new string[] { "sds" }, StringSplitOptions.None);
+                        string beforeMCB = parts.Length > 0 ? parts[0].Trim() : string.Empty;
+                        string result = beforeMCB.ToUpper();
+                        label1.Text = $"{result} SDS:";
+                        conclabel.Visible = true;
+                        conctypebox.Visible = true;
+                        conctypebox.Items.AddRange(new string[] { "MO", "MNX" });
+                        conctypebox.SelectedIndex = 0;
+                    }
+                    else if (containsMCCB)
                     {
                         string[] parts = name.Split(new string[] { "mccb" }, StringSplitOptions.None);
                         string beforeMCCB = parts.Length > 0 ? parts[0].Trim() : string.Empty;
                         string result = beforeMCCB.ToUpper();
                         label1.Text = $"{result} MCCB:";
                     }
-                    else if (containsDOL)
-                    {
-                        string[] parts = name.Split(new string[] { "dol" }, StringSplitOptions.None);
-                        string beforeMCB = parts.Length > 0 ? parts[0].Trim() : string.Empty;
-                        string result = beforeMCB.ToUpper();
-                        label1.Text = $"{result} DOL:";
-                    }
+                    
                     
                     comboBox1.Items.AddRange(new string[] { "AUTO", "DZ1", "DU", "DN0", "DN1", "DN2", "DN3" });
                     comboBox1.SelectedIndex = 0;
@@ -193,6 +212,8 @@ namespace GaMeR
                 vmbox.Checked = containsVM;
                 elrbox.Checked = containsELR;
                 spdbox.Checked = containsSPD;
+                sscheckbox.Checked = containsSS;
+                apfccheckbox.Checked = containsAPFCR;
                 mfmcheckbox.Checked = containsMFM;
                 hrccheckbox.Checked = containsHRC;
                 if (containsKVAR)
@@ -420,6 +441,8 @@ namespace GaMeR
                 bool containsSPD = spdbox.Checked;
                 bool containsHRC = hrccheckbox.Checked;
                 bool containsREAC = reactorcheckbox.Checked;
+                bool containsSS = sscheckbox.Checked;
+                bool containsAPFCR = apfccheckbox.Checked;
                 bool checkBoxSpreaders = false;
                 bool checkBoxExtendedROM = false;
                 bool checkBoxAuxilaryContacts = false;
@@ -453,6 +476,7 @@ namespace GaMeR
                 Excel.Range sdfuUsedRange = null;
                 Excel.Range apfcUsedRange = null;
                 Excel.Range dolUsedRange = null;
+                Excel.Range sdsUsedRange = null;
                 Excel.Range concUsedRange = null;
 
                 if (containsMFM)
@@ -506,7 +530,7 @@ namespace GaMeR
                         }
                     }
                 }
-                if (header.Contains("MCCB") || header.Contains("DOL"))
+                if (header.Contains("MCCB") || header.Contains("DOL") || header.Contains("SDS"))
                 {
                     for (int i = 0; i < checkedListBox1.Items.Count; i++)
                     {
@@ -643,15 +667,20 @@ namespace GaMeR
 
                     }
                 }
-                else if (header.Contains("DOL"))
+                else if (header.Contains("DOL") || header.Contains("SDS"))
                 {
-                    Excel.Worksheet dolSheet = extWorkbook.Sheets["DOL"];
-                    dolUsedRange = GetUsedRange(dolSheet, ref dolUsedRange);
+                    
                     Excel.Worksheet concSheet = extWorkbook.Sheets["CONTACTOR"];
                     concUsedRange = GetUsedRange(concSheet, ref concUsedRange);
-
+                    string conctype = conctypebox.SelectedItem.ToString();
+                    int concstar = 0;
+                    int concdelta = 0;
+                    int concamps = 0;
                     double hp = 0;
                     double kw = 0;
+                    string olrtpe = "";
+                    string olrrange = "";
+
                     if (header.Contains("HP"))
                     {
                         // Match a number (with an optional decimal point) before "HP"
@@ -676,43 +705,241 @@ namespace GaMeR
 
                     if (header.Contains("MCCB"))
                     {
-                        string breakingCapacity = "36KA";
-                        string poleType = "TPN";
+                        string breakingCapacity = "50KA";
+                        string poleType = "";
                         string mtxType = "";
-                        string conctype = "";
-
-                        if (hp > 0)
+                        bool found = false;
+                        if (header.Contains("SDS"))
                         {
-                            foreach (Excel.Range row in dolUsedRange.Rows)
+                            Excel.Worksheet sdsSheet = extWorkbook.Sheets["SDS"];
+                            sdsUsedRange = GetUsedRange(sdsSheet, ref sdsUsedRange);
+                            
+                            if (hp > 0)
                             {
-                                string cellValue = row.Cells[1, 1].Value2?.ToString() ?? "";
-                                if (cellValue == hp.ToString())
+                                foreach (Excel.Range row in sdsUsedRange.Rows)
                                 {
-                                    if (amps == "")
+                                    string cellValue = row.Cells[1, 1].Value2?.ToString() ?? "";
+                                    if (cellValue == hp.ToString())
                                     {
-                                        string ampsrating2 = row.Cells[1, 9].Value2?.ToString() ?? "";
-                                        amps = $"{ampsrating2}A";
+                                        found = true;
+                                        poleType = row.Cells[1, 19].Value2?.ToString() ?? "";
+                                        olrtpe = row.Cells[1, 17].Value2?.ToString() ?? "";
+                                        olrrange = row.Cells[1, 18].Value2?.ToString() ?? "";
+
+                                        if (amps == "")
+                                        {
+                                            string ampsrating2 = row.Cells[1, 20].Value2?.ToString() ?? "";
+                                            if (int.TryParse(ampsrating2, out int tempamps))
+                                            {
+                                                if (tempamps > 64)
+                                                {
+                                                    checkBoxSpreaders = true;
+                                                }
+                                            }
+                                            amps = $"{ampsrating2}A";
+                                        }
+                                        if (conctype == "MNX")
+                                        {
+                                            string type = row.Cells[1, 5].Value2?.ToString() ?? "";
+                                            string type2 = row.Cells[1, 6].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concstar); // Try to parse the integer part
+                                            }
+                                            string[] parts2 = type2.Split(' ');
+                                            if (parts2.Length == 2)
+                                            {
+                                                int.TryParse(parts2[1], out concdelta); // Try to parse the integer part
+                                            }
+                                        }
+                                        else if (conctype == "MO")
+                                        {
+                                            string type = row.Cells[1, 11].Value2?.ToString() ?? "";
+                                            string type2 = row.Cells[1, 12].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concstar); // Try to parse the integer part
+                                            }
+                                            string[] parts2 = type2.Split(' ');
+                                            if (parts2.Length == 2)
+                                            {
+                                                int.TryParse(parts2[1], out concdelta); // Try to parse the integer part
+                                            }
+                                        }
+
                                     }
-                                    conctype = row.Cells[1, 4].Value2?.ToString() ?? "";
+                                    
+                                }
+                                
+                            }
+                            else if (kw > 0)
+                            {
+                                
+                                foreach (Excel.Range row in sdsUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 2].Value2?.ToString() ?? "";
+                                    if (cellValue == kw.ToString())
+                                    {
+                                        found = true;
+                                        poleType = row.Cells[1, 19].Value2?.ToString() ?? "";
+                                        olrtpe = row.Cells[1, 17].Value2?.ToString() ?? "";
+                                        olrrange = row.Cells[1, 18].Value2?.ToString() ?? "";
+
+                                        if (amps == "")
+                                        {
+                                            string ampsrating2 = row.Cells[1, 20].Value2?.ToString() ?? "";
+                                            if (int.TryParse(ampsrating2, out int tempamps))
+                                            {
+                                                if (tempamps > 64)
+                                                {
+                                                    checkBoxSpreaders = true;
+                                                }
+                                            }
+                                            amps = $"{ampsrating2}A";
+                                        }
+
+                                        if (conctype == "MNX")
+                                        {
+                                            string type = row.Cells[1, 5].Value2?.ToString() ?? "";
+                                            string type2 = row.Cells[1, 6].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concstar); // Try to parse the integer part
+                                            }
+                                            string[] parts2 = type2.Split(' ');
+                                            if (parts2.Length == 2)
+                                            {
+                                                int.TryParse(parts2[1], out concdelta); // Try to parse the integer part
+                                            }
+                                        }
+                                        else if (conctype == "MO")
+                                        {
+                                            string type = row.Cells[1, 11].Value2?.ToString() ?? "";
+                                            string type2 = row.Cells[1, 12].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concstar); // Try to parse the integer part
+                                            }
+                                            string[] parts2 = type2.Split(' ');
+                                            if (parts2.Length == 2)
+                                            {
+                                                int.TryParse(parts2[1], out concdelta); // Try to parse the integer part
+                                            }
+                                        }
+                                    }
+                                    
+                                }
+                            }
+
+                        }
+                        else if (header.Contains("DOL"))
+                        {
+                            Excel.Worksheet dolSheet = extWorkbook.Sheets["DOL"];
+                            dolUsedRange = GetUsedRange(dolSheet, ref dolUsedRange);
+                            if (hp > 0)
+                            {
+                                foreach (Excel.Range row in dolUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 1].Value2?.ToString() ?? "";
+                                    if (cellValue == hp.ToString())
+                                    {
+                                        found = true;
+                                        poleType = row.Cells[1, 12].Value2?.ToString() ?? "";
+                                        olrtpe = row.Cells[1, 10].Value2?.ToString() ?? "";
+                                        olrrange = row.Cells[1, 11].Value2?.ToString() ?? "";
+
+                                        if (amps == "")
+                                        {
+                                            string ampsrating2 = row.Cells[1, 13].Value2?.ToString() ?? "";
+                                            if (int.TryParse(ampsrating2, out int tempamps))
+                                            {
+                                                if (tempamps > 64)
+                                                {
+                                                    checkBoxSpreaders = true;
+                                                }
+                                            }
+                                            amps = $"{ampsrating2}A";
+                                        }
+                                        if (conctype == "MNX")
+                                        {
+                                            string type = row.Cells[1, 4].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concamps); // Try to parse the integer part
+                                            }
+                                        }
+                                        else if (conctype == "MO")
+                                        {
+                                            string type = row.Cells[1, 9].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concamps); // Try to parse the integer part
+                                            }
+                                        }
+
+                                    }
+                                    
+                                }
+                            }
+                            else if (kw > 0)
+                            {
+                                foreach (Excel.Range row in dolUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 2].Value2?.ToString() ?? "";
+                                    if (cellValue == kw.ToString())
+                                    {
+                                        found = true;
+                                        poleType = row.Cells[1, 12].Value2?.ToString() ?? "";
+                                        olrtpe = row.Cells[1, 10].Value2?.ToString() ?? "";
+                                        olrrange = row.Cells[1, 11].Value2?.ToString() ?? "";
+
+                                        if (amps == "")
+                                        {
+                                            string ampsrating2 = row.Cells[1, 13].Value2?.ToString() ?? "";
+                                            if (int.TryParse(ampsrating2, out int tempamps))
+                                            {
+                                                if (tempamps > 64)
+                                                {
+                                                    checkBoxSpreaders = true;
+                                                }
+                                            }
+                                            amps = $"{ampsrating2}A";
+                                        }
+
+                                        if (conctype == "MNX")
+                                        {
+                                            string type = row.Cells[1, 4].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concamps); // Try to parse the integer part
+                                            }
+                                        }
+                                        else if (conctype == "MO")
+                                        {
+                                            string type = row.Cells[1, 9].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concamps); // Try to parse the integer part
+                                            }
+                                        }
+                                    }
+                                    
                                 }
                             }
                         }
-                        else if (kw > 0)
+
+                        if (!found)
                         {
-                            foreach (Excel.Range row in dolUsedRange.Rows)
-                            {
-                                string cellValue = row.Cells[1, 2].Value2?.ToString() ?? "";
-                                if (cellValue == kw.ToString())
-                                {
-                                    if (amps == "")
-                                    {
-                                        string ampsrating2 = row.Cells[1, 9].Value2?.ToString() ?? "";
-                                        amps = $"{ampsrating2}A";
-                                    }
-                                    
-                                    conctype = row.Cells[1, 4].Value2?.ToString() ?? "";
-                                }
-                            }
+                            MessageBox.Show("COMBINATION MISTAKE refer type 2 CO-ordinate sheet and CONFIRM");
+                            return;
                         }
 
                         // Extract Breaking Capacity
@@ -721,7 +948,7 @@ namespace GaMeR
                         {
                             breakingCapacity = breakingCapacityMatch.Value;
                         }
-
+                        string poleType2 = "TPN";
                         // Extract Pole Type (FP or TP)
                         Match poleTypeMatch = Regex.Match(header, @"[SDTF1234]P[N]?", RegexOptions.IgnoreCase);
                         if (poleTypeMatch.Success)
@@ -730,18 +957,23 @@ namespace GaMeR
                             {
                                 case "TPN":
                                     poleType = "TPN";
+                                    poleType2 = "TPN";
                                     break;
                                 case "TP":
                                     poleType = "TPN";
+                                    poleType2 = "TPN";
                                     break;
                                 case "3P":
                                     poleType = "TPN";
+                                    poleType2 = "TPN";
                                     break;
                                 case "FP":
                                     poleType = "4P";
+                                    poleType2 = "4P";
                                     break;
                                 case "4P":
                                     poleType = "4P";
+                                    poleType2 = "4P";
                                     break;
                             }
                         }
@@ -928,14 +1160,14 @@ namespace GaMeR
 
                                     if (amps == "400A")
                                     {
-                                        if (cellValue == $"{acctype.ToLower()} spr400 {poleType.ToLower()}")
+                                        if (cellValue == $"{acctype.ToLower()} spr400 {poleType2.ToLower()}")
                                         {
                                             rowsToCopy.Add(row);
                                         }
                                     }
                                     else
                                     {
-                                        if (cellValue == $"{acctype.ToLower()} spr {poleType.ToLower()}")
+                                        if (cellValue == $"{acctype.ToLower()} spr {poleType2.ToLower()}")
                                         {
                                             rowsToCopy.Add(row);
                                         }
@@ -993,15 +1225,90 @@ namespace GaMeR
                             }
                         }
 
+                        if (header.Contains("SDS"))
+                        {
+                            foreach (Excel.Range row in concUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                                if (cellValue == conctype && cellValue2 == concdelta.ToString())
+                                {
+                                    row.Cells[1, 5].Value2 = 2;
+                                    rowsToCopy.Add(row);
+                                }
+                            }
+
+                            foreach (Excel.Range row in concUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                                if (cellValue == conctype && cellValue2 == concstar.ToString())
+                                {
+                                    row.Cells[1, 5].Value2 = 1;
+                                    rowsToCopy.Add(row);
+                                }
+                            }
+                        }
+                        else if (header.Contains("DOL"))
+                        {
+                            foreach (Excel.Range row in concUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                                if (cellValue == conctype && cellValue2 == concamps.ToString())
+                                {
+                                    row.Cells[1, 5].Value2 = 1;
+                                    rowsToCopy.Add(row);
+                                }
+                            }
+                        }
+
+                        if (conctype == "MNX")
+                        {
+                            if (concamps < 85)
+                            {
+                                foreach (Excel.Range row in concUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                    string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                                    if (cellValue == conctype && cellValue2 == "ADD")
+                                    {
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+                            }
+                        }else if (conctype == "MO") 
+                        {
+                            if (concamps < 115)
+                            {
+                                foreach (Excel.Range row in concUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                    string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                                    if (cellValue == conctype && cellValue2 == "ADD")
+                                    {
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+                            }
+                        }
+
                         foreach (Excel.Range row in concUsedRange.Rows)
                         {
                             string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                            string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
 
-                            if (cellValue == conctype)
+                            if (cellValue == olrtpe && cellValue2 == olrrange)
                             {
                                 rowsToCopy.Add(row);
                             }
                         }
+
 
                         foreach (Excel.Range row in concUsedRange.Rows)
                         {
@@ -1013,6 +1320,7 @@ namespace GaMeR
                             }
                         }
 
+
                     }
                     else if (header.Contains("MPCB"))
                     {
@@ -1022,42 +1330,195 @@ namespace GaMeR
                     {
                         Excel.Worksheet sdfuSheet = extWorkbook.Sheets["SDFU"];
                         sdfuUsedRange = GetUsedRange(sdfuSheet, ref sdfuUsedRange);
-
+                        bool found = false;
                         string hrc = "";
-                        
-                        string conctype = "";
                         string poletype = "TPN";
+                        if (header.Contains("SDS"))
+                        {
+                            Excel.Worksheet sdsSheet = extWorkbook.Sheets["SDS"];
+                            sdsUsedRange = GetUsedRange(sdsSheet, ref sdsUsedRange);
+                            if (hp > 0)
+                            {
+                                foreach (Excel.Range row in sdsUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 1].Value2?.ToString() ?? "";
+                                    if (cellValue == hp.ToString())
+                                    {
+                                        found = true;
+                                        string ampsrating2 = row.Cells[1, 16].Value2?.ToString() ?? "";
+                                        amps = $"{ampsrating2}A";
+                                        string fuserating2 = row.Cells[1, 15].Value2?.ToString() ?? "";
+                                        hrc = $"{fuserating2}A";
+                                        olrtpe = row.Cells[1, 17].Value2?.ToString() ?? "";
+                                        olrrange = row.Cells[1, 18].Value2?.ToString() ?? "";
+                                        if (conctype == "MNX")
+                                        {
+                                            string type = row.Cells[1, 5].Value2?.ToString() ?? "";
+                                            string type2 = row.Cells[1, 6].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concstar); // Try to parse the integer part
+                                            }
+                                            string[] parts2 = type2.Split(' ');
+                                            if (parts2.Length == 2)
+                                            {
+                                                int.TryParse(parts2[1], out concdelta); // Try to parse the integer part
+                                            }
+                                        }
+                                        else if (conctype == "MO")
+                                        {
+                                            string type = row.Cells[1, 8].Value2?.ToString() ?? "";
+                                            string type2 = row.Cells[1, 9].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concstar); // Try to parse the integer part
+                                            }
+                                            string[] parts2 = type2.Split(' ');
+                                            if (parts2.Length == 2)
+                                            {
+                                                int.TryParse(parts2[1], out concdelta); // Try to parse the integer part
+                                            }
+                                        }
+                                    }
+                                    
+                                }
+                            }
+                            else if (kw > 0)
+                            {
+                                foreach (Excel.Range row in sdsUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 2].Value2?.ToString() ?? "";
+                                    if (cellValue == kw.ToString())
+                                    {
+                                        found = true;
+                                        string ampsrating2 = row.Cells[1, 16].Value2?.ToString() ?? "";
+                                        amps = $"{ampsrating2}A";
+                                        string fuserating2 = row.Cells[1, 15].Value2?.ToString() ?? "";
+                                        hrc = $"{fuserating2}A";
+                                        olrtpe = row.Cells[1, 17].Value2?.ToString() ?? "";
+                                        olrrange = row.Cells[1, 18].Value2?.ToString() ?? "";
+                                        if (conctype == "MNX")
+                                        {
+                                            string type = row.Cells[1, 5].Value2?.ToString() ?? "";
+                                            string type2 = row.Cells[1, 6].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concstar); // Try to parse the integer part
+                                            }
+                                            string[] parts2 = type2.Split(' ');
+                                            if (parts2.Length == 2)
+                                            {
+                                                int.TryParse(parts2[1], out concdelta); // Try to parse the integer part
+                                            }
+                                        }
+                                        else if (conctype == "MO")
+                                        {
+                                            string type = row.Cells[1, 8].Value2?.ToString() ?? "";
+                                            string type2 = row.Cells[1, 9].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concstar); // Try to parse the integer part
+                                            }
+                                            string[] parts2 = type2.Split(' ');
+                                            if (parts2.Length == 2)
+                                            {
+                                                int.TryParse(parts2[1], out concdelta); // Try to parse the integer part
+                                            }
+                                        }
+                                    }
+                                    
+                                }
+                            }
+                        }
+                        else if (header.Contains("DOL"))
+                        {
+                            Excel.Worksheet dolSheet = extWorkbook.Sheets["DOL"];
+                            dolUsedRange = GetUsedRange(dolSheet, ref dolUsedRange);
 
-                        if (hp > 0)
-                        {
-                            foreach (Excel.Range row in dolUsedRange.Rows)
+                            if (hp > 0)
                             {
-                                string cellValue = row.Cells[1, 1].Value2?.ToString() ?? "";
-                                if (cellValue == hp.ToString())
+                                foreach (Excel.Range row in dolUsedRange.Rows)
                                 {
-                                    string ampsrating2 = row.Cells[1, 7].Value2?.ToString() ?? "";
-                                    amps = $"{ampsrating2}A";
-                                    string fuserating2 = row.Cells[1, 6].Value2?.ToString() ?? "";
-                                    hrc = $"{fuserating2}A";
-                                    conctype= row.Cells[1, 4].Value2?.ToString() ?? "";
+                                    string cellValue = row.Cells[1, 1].Value2?.ToString() ?? "";
+                                    if (cellValue == hp.ToString())
+                                    {
+                                        found = true;
+                                        string ampsrating2 = row.Cells[1, 7].Value2?.ToString() ?? "";
+                                        amps = $"{ampsrating2}A";
+                                        string fuserating2 = row.Cells[1, 6].Value2?.ToString() ?? "";
+                                        hrc = $"{fuserating2}A";
+                                        olrtpe = row.Cells[1, 10].Value2?.ToString() ?? "";
+                                        olrrange = row.Cells[1, 11].Value2?.ToString() ?? "";
+                                        if (conctype == "MNX")
+                                        {
+                                            string type = row.Cells[1, 4].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concamps); // Try to parse the integer part
+                                            }
+                                        }
+                                        else if (conctype == "MO")
+                                        {
+                                            string type = row.Cells[1, 8].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concamps); // Try to parse the integer part
+                                            }
+                                        }
+                                    }
+                                    
+                                }
+                            }
+                            else if (kw > 0)
+                            {
+                                foreach (Excel.Range row in dolUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 2].Value2?.ToString() ?? "";
+                                    if (cellValue == kw.ToString())
+                                    {
+                                        found = true;
+                                        string ampsrating2 = row.Cells[1, 7].Value2?.ToString() ?? "";
+                                        amps = $"{ampsrating2}A";
+                                        string fuserating2 = row.Cells[1, 6].Value2?.ToString() ?? "";
+                                        hrc = $"{fuserating2}A";
+                                        olrtpe = row.Cells[1, 10].Value2?.ToString() ?? "";
+                                        olrrange = row.Cells[1, 11].Value2?.ToString() ?? "";
+                                        if (conctype == "MNX")
+                                        {
+                                            string type = row.Cells[1, 4].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concamps); // Try to parse the integer part
+                                            }
+                                        }
+                                        else if (conctype == "MO")
+                                        {
+                                            string type = row.Cells[1, 8].Value2?.ToString() ?? "";
+                                            string[] parts = type.Split(' ');
+                                            if (parts.Length == 2)
+                                            {
+                                                int.TryParse(parts[1], out concamps); // Try to parse the integer part
+                                            }
+                                        }
+                                    }
+                                    
                                 }
                             }
                         }
-                        else if (kw > 0)
+
+                        if (!found)
                         {
-                            foreach (Excel.Range row in dolUsedRange.Rows)
-                            {
-                                string cellValue = row.Cells[1, 2].Value2?.ToString() ?? "";
-                                if (cellValue == kw.ToString())
-                                {
-                                    string ampsrating2 = row.Cells[1, 7].Value2?.ToString() ?? "";
-                                    amps = $"{ampsrating2}A";
-                                    string fuserating2 = row.Cells[1, 6].Value2?.ToString() ?? "";
-                                    hrc = $"{fuserating2}A";
-                                    conctype = row.Cells[1, 4].Value2?.ToString() ?? "";
-                                }
-                            }
+                            MessageBox.Show("COMBINATION MISTAKE refer type 2 CO-ordinate sheet and CONFIRM");
+                            return;
                         }
+                        
 
                         foreach (Excel.Range row in sdfuUsedRange.Rows)
                         {
@@ -1085,11 +1546,86 @@ namespace GaMeR
                             }
                         }
 
+                        if (header.Contains("SDS"))
+                        {
+                            foreach (Excel.Range row in concUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                                if (cellValue == conctype && cellValue2 == concdelta.ToString())
+                                {
+                                    row.Cells[1, 5].Value2 = 2;
+                                    rowsToCopy.Add(row);
+                                }
+                            }
+
+                            foreach (Excel.Range row in concUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                                if (cellValue == conctype && cellValue2 == concstar.ToString())
+                                {
+                                    row.Cells[1, 5].Value2 = 1;
+                                    rowsToCopy.Add(row);
+                                }
+                            }
+                        }
+                        else if (header.Contains("DOL"))
+                        {
+                            foreach (Excel.Range row in concUsedRange.Rows)
+                            {
+                                string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                                if (cellValue == conctype && cellValue2 == concamps.ToString())
+                                {
+                                    row.Cells[1, 5].Value2 = 1;
+                                    rowsToCopy.Add(row);
+                                }
+                            }
+                        }
+
+                        if (conctype == "MNX")
+                        {
+                            if (concamps < 85)
+                            {
+                                foreach (Excel.Range row in concUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                    string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                                    if (cellValue == conctype && cellValue2 == "ADD")
+                                    {
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+                            }
+                        }
+                        else if (conctype == "MO")
+                        {
+                            if (concamps < 115)
+                            {
+                                foreach (Excel.Range row in concUsedRange.Rows)
+                                {
+                                    string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
+                                    string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                                    if (cellValue == conctype && cellValue2 == "ADD")
+                                    {
+                                        rowsToCopy.Add(row);
+                                    }
+                                }
+                            }
+                        }
+
                         foreach (Excel.Range row in concUsedRange.Rows)
                         {
                             string cellValue = row.Cells[1, 27].Value2?.ToString() ?? "";
-                            
-                            if (cellValue == conctype)
+                            string cellValue2 = row.Cells[1, 28].Value2?.ToString() ?? "";
+
+                            if (cellValue == olrtpe && cellValue2 == olrrange)
                             {
                                 rowsToCopy.Add(row);
                             }
@@ -1875,6 +2411,131 @@ namespace GaMeR
 
                 }
 
+                if (containsAPFCR)
+                {
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "apfcr")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "ss")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                }
+
+                if (containsSS)
+                {
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "ss")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                }
+
+                if (containsAM)
+                {
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "am")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                }
+                if (containsAMSS)
+                {
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "ass")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                }
+
+                if (containsVM)
+                {
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "vm")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                }
+                if (containsVMSS)
+                {
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "vss")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                }
+
+                if (containsELR)
+                {
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "elr")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                }
+
+                if (containsSPD)
+                {
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "spd")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                }
+
+                if (testbox1)
+                {
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "test1")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                }
+
+                if (testbox2)
+                {
+                    foreach (Excel.Range row in mainUsedRange.Rows)
+                    {
+                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
+                        if (cellValue == "test2")
+                        {
+                            rowsToCopy.Add(row);
+                        }
+                    }
+                }
 
                 if (containsRGA && containsRYB)
                 {
@@ -2130,103 +2791,11 @@ namespace GaMeR
                     }
                 }
 
-                if (containsAM)
-                {
-                    foreach (Excel.Range row in mainUsedRange.Rows)
-                    {
-                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
-                        if (cellValue == "am")
-                        {
-                            rowsToCopy.Add(row);
-                        }
-                    }
-                }
-                if (containsAMSS)
-                {
-                    foreach (Excel.Range row in mainUsedRange.Rows)
-                    {
-                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
-                        if (cellValue == "ass")
-                        {
-                            rowsToCopy.Add(row);
-                        }
-                    }
-                }
-
-                if (containsVM)
-                {
-                    foreach (Excel.Range row in mainUsedRange.Rows)
-                    {
-                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
-                        if (cellValue == "vm")
-                        {
-                            rowsToCopy.Add(row);
-                        }
-                    }
-                }
-                if (containsVMSS)
-                {
-                    foreach (Excel.Range row in mainUsedRange.Rows)
-                    {
-                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
-                        if (cellValue == "vss")
-                        {
-                            rowsToCopy.Add(row);
-                        }
-                    }
-                }
-
-                if (containsELR)
-                {
-                    foreach (Excel.Range row in mainUsedRange.Rows)
-                    {
-                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
-                        if (cellValue == "elr")
-                        {
-                            rowsToCopy.Add(row);
-                        }
-                    }
-                }
-
-                if (containsSPD)
-                {
-                    foreach (Excel.Range row in mainUsedRange.Rows)
-                    {
-                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
-                        if (cellValue == "spd")
-                        {
-                            rowsToCopy.Add(row);
-                        }
-                    }
-                }
-
-                if (testbox1)
-                {
-                    foreach (Excel.Range row in mainUsedRange.Rows)
-                    {
-                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
-                        if (cellValue == "test1")
-                        {
-                            rowsToCopy.Add(row);
-                        }
-                    }
-                }
-
-                if (testbox2)
-                {
-                    foreach (Excel.Range row in mainUsedRange.Rows)
-                    {
-                        string cellValue = row.Cells[1, 27].Value2?.ToString().ToLower() ?? "";
-                        if (cellValue == "test2")
-                        {
-                            rowsToCopy.Add(row);
-                        }
-                    }
-                }
+                
 
                 //inserting busbar interconnection and consumebles
 
-                if (header.Contains("MCCB") || header.Contains("COS") || header.Contains("SDFU") || header.Contains("DOL"))
+                if (header.Contains("MCCB") || header.Contains("COS") || header.Contains("SDFU") || header.Contains("DOL") || header.Contains("SDS"))
                 {
                     int amps1 = 0;
 

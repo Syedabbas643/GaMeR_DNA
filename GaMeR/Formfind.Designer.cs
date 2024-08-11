@@ -59,12 +59,16 @@
             this.hrccheckbox = new System.Windows.Forms.CheckBox();
             this.fusecombobox = new System.Windows.Forms.ComboBox();
             this.reactorcheckbox = new System.Windows.Forms.CheckBox();
+            this.conclabel = new System.Windows.Forms.Label();
+            this.conctypebox = new System.Windows.Forms.ComboBox();
+            this.sscheckbox = new System.Windows.Forms.CheckBox();
+            this.apfccheckbox = new System.Windows.Forms.CheckBox();
             this.SuspendLayout();
             // 
             // spdbox
             // 
             this.spdbox.AutoSize = true;
-            this.spdbox.Location = new System.Drawing.Point(105, 410);
+            this.spdbox.Location = new System.Drawing.Point(105, 433);
             this.spdbox.Name = "spdbox";
             this.spdbox.Size = new System.Drawing.Size(48, 17);
             this.spdbox.TabIndex = 48;
@@ -74,7 +78,7 @@
             // elrbox
             // 
             this.elrbox.AutoSize = true;
-            this.elrbox.Location = new System.Drawing.Point(32, 410);
+            this.elrbox.Location = new System.Drawing.Point(32, 433);
             this.elrbox.Name = "elrbox";
             this.elrbox.Size = new System.Drawing.Size(47, 17);
             this.elrbox.TabIndex = 47;
@@ -85,7 +89,7 @@
             // 
             this.label5.AutoSize = true;
             this.label5.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label5.Location = new System.Drawing.Point(29, 383);
+            this.label5.Location = new System.Drawing.Point(29, 406);
             this.label5.Name = "label5";
             this.label5.Size = new System.Drawing.Size(124, 13);
             this.label5.TabIndex = 46;
@@ -113,7 +117,7 @@
             // 
             // mfmcat
             // 
-            this.mfmcat.Location = new System.Drawing.Point(153, 314);
+            this.mfmcat.Location = new System.Drawing.Point(153, 337);
             this.mfmcat.Name = "mfmcat";
             this.mfmcat.Size = new System.Drawing.Size(151, 20);
             this.mfmcat.TabIndex = 43;
@@ -122,7 +126,7 @@
             // label8
             // 
             this.label8.AutoSize = true;
-            this.label8.Location = new System.Drawing.Point(48, 350);
+            this.label8.Location = new System.Drawing.Point(48, 373);
             this.label8.Name = "label8";
             this.label8.Size = new System.Drawing.Size(21, 13);
             this.label8.TabIndex = 42;
@@ -141,13 +145,13 @@
             this.checkedListBox1.FormattingEnabled = true;
             this.checkedListBox1.Location = new System.Drawing.Point(32, 89);
             this.checkedListBox1.Name = "checkedListBox1";
-            this.checkedListBox1.Size = new System.Drawing.Size(347, 95);
+            this.checkedListBox1.Size = new System.Drawing.Size(255, 95);
             this.checkedListBox1.TabIndex = 29;
             // 
             // label7
             // 
             this.label7.AutoSize = true;
-            this.label7.Location = new System.Drawing.Point(232, 350);
+            this.label7.Location = new System.Drawing.Point(232, 373);
             this.label7.Name = "label7";
             this.label7.Size = new System.Drawing.Size(21, 13);
             this.label7.TabIndex = 41;
@@ -157,7 +161,7 @@
             // label6
             // 
             this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(91, 350);
+            this.label6.Location = new System.Drawing.Point(91, 373);
             this.label6.Name = "label6";
             this.label6.Size = new System.Drawing.Size(41, 13);
             this.label6.TabIndex = 40;
@@ -167,7 +171,7 @@
             // ctva
             // 
             this.ctva.FormattingEnabled = true;
-            this.ctva.Location = new System.Drawing.Point(259, 347);
+            this.ctva.Location = new System.Drawing.Point(259, 370);
             this.ctva.Name = "ctva";
             this.ctva.Size = new System.Drawing.Size(62, 21);
             this.ctva.TabIndex = 39;
@@ -176,7 +180,7 @@
             // ctamps
             // 
             this.ctamps.FormattingEnabled = true;
-            this.ctamps.Location = new System.Drawing.Point(138, 347);
+            this.ctamps.Location = new System.Drawing.Point(138, 370);
             this.ctamps.Name = "ctamps";
             this.ctamps.Size = new System.Drawing.Size(88, 21);
             this.ctamps.TabIndex = 38;
@@ -185,7 +189,7 @@
             // label4
             // 
             this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(91, 317);
+            this.label4.Location = new System.Drawing.Point(91, 340);
             this.label4.Name = "label4";
             this.label4.Size = new System.Drawing.Size(47, 13);
             this.label4.TabIndex = 37;
@@ -195,7 +199,7 @@
             // mfmcheckbox
             // 
             this.mfmcheckbox.AutoSize = true;
-            this.mfmcheckbox.Location = new System.Drawing.Point(32, 316);
+            this.mfmcheckbox.Location = new System.Drawing.Point(32, 339);
             this.mfmcheckbox.Name = "mfmcheckbox";
             this.mfmcheckbox.Size = new System.Drawing.Size(50, 17);
             this.mfmcheckbox.TabIndex = 36;
@@ -207,7 +211,7 @@
             // 
             this.label3.AutoSize = true;
             this.label3.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label3.Location = new System.Drawing.Point(29, 290);
+            this.label3.Location = new System.Drawing.Point(29, 313);
             this.label3.Name = "label3";
             this.label3.Size = new System.Drawing.Size(79, 13);
             this.label3.TabIndex = 35;
@@ -283,7 +287,7 @@
             // test1
             // 
             this.test1.AutoSize = true;
-            this.test1.Location = new System.Drawing.Point(32, 445);
+            this.test1.Location = new System.Drawing.Point(32, 468);
             this.test1.Name = "test1";
             this.test1.Size = new System.Drawing.Size(63, 17);
             this.test1.TabIndex = 49;
@@ -293,7 +297,7 @@
             // test2
             // 
             this.test2.AutoSize = true;
-            this.test2.Location = new System.Drawing.Point(105, 445);
+            this.test2.Location = new System.Drawing.Point(105, 468);
             this.test2.Name = "test2";
             this.test2.Size = new System.Drawing.Size(63, 17);
             this.test2.TabIndex = 50;
@@ -346,7 +350,7 @@
             // hrccheckbox
             // 
             this.hrccheckbox.AutoSize = true;
-            this.hrccheckbox.Location = new System.Drawing.Point(190, 410);
+            this.hrccheckbox.Location = new System.Drawing.Point(190, 433);
             this.hrccheckbox.Name = "hrccheckbox";
             this.hrccheckbox.Size = new System.Drawing.Size(80, 17);
             this.hrccheckbox.TabIndex = 55;
@@ -356,7 +360,7 @@
             // fusecombobox
             // 
             this.fusecombobox.FormattingEnabled = true;
-            this.fusecombobox.Location = new System.Drawing.Point(276, 408);
+            this.fusecombobox.Location = new System.Drawing.Point(276, 431);
             this.fusecombobox.Name = "fusecombobox";
             this.fusecombobox.Size = new System.Drawing.Size(68, 21);
             this.fusecombobox.TabIndex = 56;
@@ -364,7 +368,7 @@
             // reactorcheckbox
             // 
             this.reactorcheckbox.AutoSize = true;
-            this.reactorcheckbox.Location = new System.Drawing.Point(190, 60);
+            this.reactorcheckbox.Location = new System.Drawing.Point(301, 89);
             this.reactorcheckbox.Name = "reactorcheckbox";
             this.reactorcheckbox.Size = new System.Drawing.Size(64, 17);
             this.reactorcheckbox.TabIndex = 57;
@@ -372,11 +376,54 @@
             this.reactorcheckbox.UseVisualStyleBackColor = true;
             this.reactorcheckbox.Visible = false;
             // 
+            // conclabel
+            // 
+            this.conclabel.AutoSize = true;
+            this.conclabel.Location = new System.Drawing.Point(298, 118);
+            this.conclabel.Name = "conclabel";
+            this.conclabel.Size = new System.Drawing.Size(68, 13);
+            this.conclabel.TabIndex = 58;
+            this.conclabel.Text = "CONC TYPE";
+            this.conclabel.Visible = false;
+            // 
+            // conctypebox
+            // 
+            this.conctypebox.FormattingEnabled = true;
+            this.conctypebox.Location = new System.Drawing.Point(301, 134);
+            this.conctypebox.Name = "conctypebox";
+            this.conctypebox.Size = new System.Drawing.Size(65, 21);
+            this.conctypebox.TabIndex = 59;
+            this.conctypebox.Visible = false;
+            // 
+            // sscheckbox
+            // 
+            this.sscheckbox.AutoSize = true;
+            this.sscheckbox.Location = new System.Drawing.Point(37, 285);
+            this.sscheckbox.Name = "sscheckbox";
+            this.sscheckbox.Size = new System.Drawing.Size(40, 17);
+            this.sscheckbox.TabIndex = 60;
+            this.sscheckbox.Text = "SS";
+            this.sscheckbox.UseVisualStyleBackColor = true;
+            // 
+            // apfccheckbox
+            // 
+            this.apfccheckbox.AutoSize = true;
+            this.apfccheckbox.Location = new System.Drawing.Point(143, 285);
+            this.apfccheckbox.Name = "apfccheckbox";
+            this.apfccheckbox.Size = new System.Drawing.Size(91, 17);
+            this.apfccheckbox.TabIndex = 61;
+            this.apfccheckbox.Text = "APFC RELAY";
+            this.apfccheckbox.UseVisualStyleBackColor = true;
+            // 
             // Formfind
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(434, 654);
+            this.Controls.Add(this.apfccheckbox);
+            this.Controls.Add(this.sscheckbox);
+            this.Controls.Add(this.conctypebox);
+            this.Controls.Add(this.conclabel);
             this.Controls.Add(this.reactorcheckbox);
             this.Controls.Add(this.fusecombobox);
             this.Controls.Add(this.hrccheckbox);
@@ -450,5 +497,9 @@
         private System.Windows.Forms.CheckBox hrccheckbox;
         private System.Windows.Forms.ComboBox fusecombobox;
         private System.Windows.Forms.CheckBox reactorcheckbox;
+        private System.Windows.Forms.Label conclabel;
+        private System.Windows.Forms.ComboBox conctypebox;
+        private System.Windows.Forms.CheckBox sscheckbox;
+        private System.Windows.Forms.CheckBox apfccheckbox;
     }
 }

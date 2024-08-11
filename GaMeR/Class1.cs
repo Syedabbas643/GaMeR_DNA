@@ -32,7 +32,10 @@ namespace GaMeR
         private Form1 form1;
         private Find_Data Find_Data;
         private Timer _authorizationCheckTimer;
-        
+        private Dictionary<string, Excel.Range> catalogNumberToSheetMap = new Dictionary<string, Excel.Range>();
+        private Dictionary<string, Excel.Range> descToSheetMap = new Dictionary<string, Excel.Range>();
+        private Dictionary<string, Excel.Range> makeToSheetMap = new Dictionary<string, Excel.Range>();
+
         public override string GetCustomUI(string RibbonID)
         {
             return @"
@@ -57,6 +60,7 @@ namespace GaMeR
                   <button id=""auto2"" label=""Copy to below FEEDERS"" getImage=""GetCustomImage"" size=""large"" onAction=""OnbelowClick""/>
                   <button id=""auto"" label=""Read COSTING sheet"" getImage=""GetCustomImage"" size=""large"" onAction=""OnreadClick""/>
                   <button id=""layout"" label=""Automate GA sheet"" getImage=""GetCustomImage"" size=""large"" onAction=""OngaClick""/>
+                  <button id=""find3"" label=""Create DATA Sheet"" getImage=""GetCustomImage"" size=""large"" onAction=""OnsheetClick""/>
                   <separator id=""separator5""/>
                   <button id=""help"" label=""HELP"" getImage=""GetCustomImage"" size=""large"" onAction=""OnhelpClick""/>
                   <button id=""about"" label=""About ME"" getImage=""GetCustomImage"" size=""large"" onAction=""OnaboutClick""/>
@@ -174,6 +178,7 @@ namespace GaMeR
 
         }
 
+        
         public void OnhelpClick(IRibbonControl control)
         {
             Excel.Application excelApp = ExcelDnaUtil.Application as Excel.Application;
@@ -226,7 +231,329 @@ namespace GaMeR
             Marshal.ReleaseComObject(extWorkbook);
 
         }
+        public void OnsheetClick(IRibbonControl control)
+        {
 
+            // Get the current Excel application and workbook
+            Excel.Application excelApp = ExcelDna.Integration.ExcelDnaUtil.Application as Excel.Application;
+            Excel.Workbook currentWorkbook = excelApp.ActiveWorkbook;
+            Excel.Worksheet currentSheet = excelApp.ActiveSheet;
+            Excel.Workbook extWorkbook = null;
+            Excel.Worksheet costingsheet = null;
+
+            try
+            {
+                string savedPath = GetDatabaseFilePath();
+
+                if (string.IsNullOrEmpty(savedPath))
+                {
+                    MessageBox.Show("No folder path selected. Please select a folder first.");
+                    return;
+                }
+
+                string extFilePath = System.IO.Path.Combine(savedPath, "database.xlsx");
+                string workbookName = System.IO.Path.GetFileName(extFilePath);
+
+                Excel.Worksheet dataSheet = null;
+                foreach (Excel.Worksheet sheet in currentWorkbook.Sheets)
+                {
+                    if (sheet.Name == "COSTING")
+                    {
+                        costingsheet = sheet;
+                        break;
+                    }
+                }
+
+                foreach (Excel.Worksheet sheet in currentWorkbook.Sheets)
+                {
+                    if (sheet.Name == "DATA")
+                    {
+                        dataSheet = sheet;
+                        break;
+                    }
+                }
+
+                // If the "DATA" sheet exists, delete it
+                if (dataSheet != null)
+                {
+                    catalogNumberToSheetMap?.Clear();
+                    descToSheetMap?.Clear();
+                    makeToSheetMap?.Clear();
+                    dataSheet.Delete();
+                    excelApp.EnableEvents = true;
+                    excelApp.DisplayAlerts = true;
+                    excelApp.ScreenUpdating = true;
+                    return;
+                }
+
+                if (costingsheet == null)
+                {
+                    MessageBox.Show("NO COSTING SHEET FOUND");
+                    return;
+                }
+
+                // Add a new sheet named "DATA"
+                Excel.Worksheet newDataSheet = currentWorkbook.Sheets.Add(After: currentWorkbook.Sheets[currentWorkbook.Sheets.Count]) as Excel.Worksheet;
+                newDataSheet.Name = "DATA";
+
+                if (costingsheet != null)
+                {
+                    Excel.Range sourceRange = costingsheet.Range["1:52"]; // Range of first 52 rows
+                    Excel.Range destinationRange = newDataSheet.Range["1:52"]; // Destination range in the new sheet
+                    sourceRange.Copy(destinationRange);
+
+                    // Hide the 52nd row in the new sheet
+                    Excel.Range rowsToHide = newDataSheet.Range["1:52"];
+                    rowsToHide.EntireRow.Hidden = true;
+                }
+
+                // Optional: Activate the new sheet
+                newDataSheet.Activate();
+
+                Excel.Range deschead = newDataSheet.Cells[54, 2];
+                deschead.Value2 = "DESCRIPTION";
+                deschead.Interior.Color = 15773696;
+                deschead.RowHeight = 30;
+                deschead.ColumnWidth = 40;
+                ApplyBorders(deschead);
+
+                Excel.Range cathead = newDataSheet.Cells[54, 3];
+                cathead.Value2 = "CATLOUGE NO";
+                cathead.Interior.Color = 15773696;
+                cathead.RowHeight = 30;
+                cathead.ColumnWidth = 20;
+                ApplyBorders(cathead);
+                
+                Excel.Range makehead = newDataSheet.Cells[54, 4];
+                makehead.Value2 = "MAKE";
+                makehead.Interior.Color = 15773696;
+                makehead.RowHeight = 30;
+                makehead.ColumnWidth = 20;
+                ApplyBorders(makehead);
+
+                Excel.Range qtyhead = newDataSheet.Cells[54, 5];
+                qtyhead.Value2 = "MATCHES COUNT";
+                qtyhead.Interior.Color = 15773696;
+                qtyhead.RowHeight = 30;
+                qtyhead.ColumnWidth = 20;
+                ApplyBorders(qtyhead);
+
+                excelApp.DisplayAlerts = false;  // Disable alerts
+                excelApp.ScreenUpdating = false;
+                excelApp.ErrorCheckingOptions.BackgroundChecking = false;  // Disable background error checking
+
+
+                foreach (Excel.Workbook wb in excelApp.Workbooks)
+                {
+                    if (wb.Name.Equals(workbookName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        extWorkbook = wb;
+                        break;
+                    }
+                }
+
+                if (extWorkbook == null)
+                {
+                    extWorkbook = excelApp.Workbooks.Open(extFilePath, false, false);
+
+                }
+
+
+                foreach (Excel.Worksheet sheet in extWorkbook.Sheets)
+                {
+                    if(sheet.Name != "HELP" || sheet.Name != "DOL")
+                    {
+                        Excel.Range usedRange1 = sheet.UsedRange;
+                        Excel.Range columnB = usedRange1.Columns["B"];
+                        Excel.Range columnC = usedRange1.Columns["C"];
+                        Excel.Range columnD = usedRange1.Columns["D"];
+
+                        foreach (Excel.Range cell in columnB.Cells)
+                        {
+                            if (cell.Value2 != null && cell.Row > 52)
+                            {
+                                string description = cell.Value2.ToString();
+                                if (!descToSheetMap.ContainsKey(description))
+                                {
+                                    descToSheetMap[description] = cell;
+                                }
+                            }
+                        }
+
+                        foreach (Excel.Range cell in columnC.Cells)
+                        {
+                            if (cell.Value2 != null && cell.Row > 52)
+                            {
+                                string catalogNumber = cell.Value2.ToString();
+                                if (!catalogNumberToSheetMap.ContainsKey(catalogNumber))
+                                {
+                                    catalogNumberToSheetMap[catalogNumber] = cell;
+                                }
+                            }
+                        }
+
+                        foreach (Excel.Range cell in columnD.Cells)
+                        {
+                            if (cell.Value2 != null && cell.Row > 52)
+                            {
+                                string make = cell.Value2.ToString();
+                                makeToSheetMap[make] = cell;
+                            }
+                        }
+                    }
+                }
+
+                Excel.Range desccell = newDataSheet.Cells[55, 2];
+                desccell.RowHeight = 20;
+                ApplyBorders(desccell);
+                Excel.Range catcell = newDataSheet.Cells[55, 3];
+                //catcell.RowHeight = 20;
+                ApplyBorders(catcell);
+                Excel.Range makecell = newDataSheet.Cells[55, 4];
+                //makecell.RowHeight = 20;
+                ApplyBorders(makecell);
+                Excel.Range qtycell = newDataSheet.Cells[55, 5];
+                qtycell.Value2 = 20;
+                //qtycell.RowHeight = 20;
+                ApplyBorders(qtycell);
+
+                excelApp.DisplayAlerts = true;  // Disable alerts
+                excelApp.ErrorCheckingOptions.BackgroundChecking = true;
+                excelApp.ScreenUpdating = true;
+
+                ((Excel.DocEvents_Event)newDataSheet).Change += new Excel.DocEvents_ChangeEventHandler(SheetChange);
+
+            }
+            catch (Exception ex) 
+            {
+                MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                excelApp.DisplayAlerts = true;  // Disable alerts
+                excelApp.ErrorCheckingOptions.BackgroundChecking = true;
+                excelApp.ScreenUpdating = true;
+                Marshal.ReleaseComObject(excelApp);
+                Marshal.ReleaseComObject(currentWorkbook);
+            }
+                
+            
+        }
+        private void SheetChange(Excel.Range target)
+        {
+            Excel.Application excelApp = ExcelDna.Integration.ExcelDnaUtil.Application as Excel.Application;
+            Excel.Worksheet activeSheet = excelApp.ActiveSheet;
+
+            excelApp.EnableEvents = false;
+            excelApp.DisplayAlerts = false;
+            excelApp.ScreenUpdating = false;
+
+            if (target.Column < 2 || target.Column > 4 || target.Row != 55)
+            {
+                excelApp.EnableEvents = true;
+                excelApp.DisplayAlerts = true;
+                excelApp.ScreenUpdating = true;
+                return;
+            }
+
+            try
+            {
+                // Get search text from all three filter cells
+                string descriptionSearchText = activeSheet.Cells[55, 2].Value2?.ToString() ?? "";
+                string catalogNumberSearchText = activeSheet.Cells[55, 3].Value2?.ToString() ?? "";
+                string makeSearchText = activeSheet.Cells[55, 4].Value2?.ToString() ?? "";
+                int macthlimit = 20;
+
+                try 
+                {
+                    macthlimit = int.Parse(activeSheet.Cells[55, 5].Value2.ToString());
+                }
+                catch { MessageBox.Show("Cant get match quantity so keeping as default '20'."); }
+
+                // Split the description search text into keywords
+                string[] descriptionKeywords = descriptionSearchText.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+                // Clear any previous results
+                Excel.Range usedRange = activeSheet.UsedRange;
+                int lastRow = usedRange.Rows.Count;
+
+                // Loop backwards to avoid skipping rows due to shifting
+                for (int row = lastRow; row >= 57; row--)
+                {
+                    Excel.Range rowToDelete = activeSheet.Rows[row];
+                    rowToDelete.Delete();
+                }
+
+                // Check if there is any search criteria
+                if (descriptionKeywords.Length > 0 || !string.IsNullOrEmpty(catalogNumberSearchText) || !string.IsNullOrEmpty(makeSearchText))
+                {
+                    int resultRow = 57; // Start inserting results from row 5
+                    int matchCount = 0; // Track number of matches
+
+                    // Iterate over all descriptions
+                    foreach (var descKvp in descToSheetMap)
+                    {
+                        string description = descKvp.Key;
+
+                        // Check if all keywords are present in the description
+                        bool descMatches = true;
+                        foreach (string keyword in descriptionKeywords)
+                        {
+                            if (description.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) < 0)
+                            {
+                                descMatches = false;
+                                break;
+                            }
+                        }
+
+                        // Get corresponding catalog number and make if the description matches
+                        if (descMatches)
+                        {
+                            Excel.Range descCell = descKvp.Value;
+                            Excel.Worksheet descSheet = descCell.Worksheet;
+                            string catalogNumber = descSheet.Cells[descCell.Row, 3].Value2?.ToString() ?? "";
+                            string make = descSheet.Cells[descCell.Row, 4].Value2?.ToString() ?? "";
+
+                            // Check if the catalog number and make match
+                            bool catalogNumberMatches = string.IsNullOrEmpty(catalogNumberSearchText) || catalogNumber.IndexOf(catalogNumberSearchText, StringComparison.OrdinalIgnoreCase) >= 0;
+                            bool makeMatches = string.IsNullOrEmpty(makeSearchText) || make.IndexOf(makeSearchText, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                            // If all criteria match, copy the row
+                            if (catalogNumberMatches && makeMatches)
+                            {
+                                if (matchCount >= macthlimit)
+                                {
+                                    break; // Stop after 30 matches
+                                }
+
+                                // Copy the row from the source worksheet
+                                Excel.Range srcRow = descSheet.Rows[descCell.Row];
+                                srcRow.Copy();
+
+                                // Paste it in the target worksheet starting at resultRow
+                                Excel.Range destRow = activeSheet.Rows[resultRow];
+                                destRow.PasteSpecial(Excel.XlPasteType.xlPasteAll);
+
+                                resultRow++;
+                                matchCount++;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) 
+            {
+                MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                excelApp.EnableEvents = true;
+                excelApp.DisplayAlerts = true;
+                excelApp.ScreenUpdating = true;
+            }
+
+            
+        }
         public void OnaboutClick(IRibbonControl control)
         {
             MessageBox.Show(
@@ -259,7 +586,7 @@ namespace GaMeR
                     return;
                 }
 
-                string extFilePath = System.IO.Path.Combine(savedPath, "database.xlsx");
+                string extFilePath = System.IO.Path.Combine(savedPath, "bom_database.xlsx");
 
                 using (OpenFileDialog openFileDialog = new OpenFileDialog())
                 {
@@ -282,18 +609,12 @@ namespace GaMeR
                         foreach (Excel.Worksheet sheet in databaseWorkbook.Sheets)
                         {
                             Excel.Range usedRange = sheet.UsedRange;
-                            Excel.Range columnB = usedRange.Columns["B"];
+                            Excel.Range columnB = usedRange.Columns["A"];
 
                             foreach (Excel.Range cell in columnB.Cells)
                             {
-                                if (cell.Row > 52) // Exclude first 52 rows
-                                {
-                                    string cellValue = cell.Value2?.ToString();
-                                    if (cell.Interior.Color != 49407 && !string.IsNullOrEmpty(cellValue))
-                                    {
-                                        databaseValues.Add(cellValue);
-                                    }
-                                }
+                                string cellValue = cell.Value2?.ToString();
+                                databaseValues.Add(cellValue);
                             }
                         }
                         Excel.Worksheet newSheet = (Excel.Worksheet)databaseWorkbook.Sheets.Add();
@@ -361,7 +682,7 @@ namespace GaMeR
 
                         }
 
-                        OrganizeDataByMake(newSheet);
+                        OrganizeDataByMake(newSheet,2);
                     }
                     
                 }
@@ -385,51 +706,7 @@ namespace GaMeR
                 MessageBox.Show(string.Join("\n", errorMessages), "Processing Errors", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-        private void OrganizeDataByMake(Excel.Worksheet sheet)
-        {
-            Dictionary<string, List<Excel.Range>> makeRows = new Dictionary<string, List<Excel.Range>>();
-            Excel.Range usedRange = sheet.UsedRange;
-
-            int lastRow = usedRange.Rows.Count;
-           
-            for (int rowIndex = 2; rowIndex <= lastRow; rowIndex++) // Assuming data starts from row 2
-            {
-                Excel.Range row = sheet.Rows[rowIndex];
-                string make = row.Cells[1, 4].Value2?.ToString() ?? ""; // Assuming make is in column C
-
-                if (!makeRows.ContainsKey(make))
-                {
-                    makeRows[make] = new List<Excel.Range>();
-                }
-
-                makeRows[make].Add(row);
-            }
-
-            if (makeRows.Count == 0)
-            {
-                return;
-            }
-
-            // Reinsert data grouped by make
-            int currentRow = lastRow + 2; // Start from the first row
-
-            foreach (var make in makeRows.Keys)
-            {
-                foreach (var row in makeRows[make])
-                {
-                    row.Copy(sheet.Rows[currentRow]);
-                    currentRow++;
-                }
-                // Add a blank row between different makes
-                currentRow++;
-            }
-            if (lastRow > 2) // Avoid deleting all rows if there's no data
-            {
-                Excel.Range rowsToDelete = sheet.Rows["2:" + (lastRow + 1)];
-                rowsToDelete.Delete(); // Delete all rows from row 2 to the last used row
-            }
-
-        }
+        
 
         public void OnbelowClick(IRibbonControl control)
         {
@@ -834,11 +1111,25 @@ namespace GaMeR
                 );
 
                 Dictionary<string, string> catalogNumberToSheetMap = new Dictionary<string, string>();
+                Dictionary<string, string> descToSheetMap = new Dictionary<string, string>();
 
                 foreach (Excel.Worksheet sheet in extWorkbook2.Sheets)
                 {
                     Excel.Range usedRange1 = sheet.UsedRange;
+                    Excel.Range columnA1 = usedRange1.Columns["A"];
                     Excel.Range columnB1 = usedRange1.Columns["B"];
+
+                    foreach (Excel.Range cell in columnA1.Cells)
+                    {
+                        if (cell.Value2 != null)
+                        {
+                            string description = cell.Value2.ToString();
+                            if (!descToSheetMap.ContainsKey(description))
+                            {
+                                descToSheetMap[description] = sheet.Name;
+                            }
+                        }
+                    }
 
                     foreach (Excel.Range cell in columnB1.Cells)
                     {
@@ -879,6 +1170,17 @@ namespace GaMeR
                     extWorkbook.Close(false);
                     return;
                 }
+
+                foreach (Excel.Worksheet sheet in currentWorkbook.Sheets)
+                {
+                    if (sheet.Visible == Excel.XlSheetVisibility.xlSheetHidden)
+                    {
+                        MessageBox.Show($"Sheet '{sheet.Name}' is hidden.plz run after unhiding all sheets");
+                        extWorkbook.Close(false);
+                        return;
+                    }
+                }
+
 
                 tempSheet.Copy(After: currentWorkbook.Sheets[currentWorkbook.Sheets.Count]);
 
@@ -921,9 +1223,10 @@ namespace GaMeR
                             { "LAMP", 16 },
                             { "REA-CAP", 18 },
                             { "CONTACTOR", 20 },
-                            { "CT", 22 },
-                            { "NULL", 31 },
-                            { "MAKE", 34 }
+                            { "TB", 22 },
+                            { "CT", 24 },
+                            { "NULL", 33 },
+                            { "MAKE", 36 }
                         };
 
                 List<Excel.Range> headings = new List<Excel.Range>();
@@ -938,6 +1241,17 @@ namespace GaMeR
                 for (int i = 0; i < headings.Count; i++)
                 {
                     Excel.Range heading = headings[i];
+                    int panelqty = 1;
+                    try
+                    {
+                        panelqty = int.Parse(heading.Offset[0, 1].Value2.ToString());
+                    }
+                    catch
+                    {
+                        MessageBox.Show($"{heading.Value2.ToString()} has no QUANTITY. So keeping as 1");
+                    }
+
+
                     Excel.Range nextHeading = (i < headings.Count - 1) ? headings[i + 1] : null;
 
                     Excel.Range dataRange;
@@ -969,72 +1283,25 @@ namespace GaMeR
                     foreach (Excel.Range cell in columnCDataRange)
                     {
                         string catNumber = cell.Value2?.ToString();
+                        string columnBValue = currentSheet.Cells[cell.Row, "B"].Value2?.ToString();
                         if (catNumber != null && catalogNumberToSheetMap.TryGetValue(catNumber, out string productName))
+                        {
+                            ProcessRowold(currentSheet, newSheet, cell, productName, catNumber, productNextRow, panelqty, countColumn, i);
+                        }
+                        else if (columnBValue != null && descToSheetMap.TryGetValue(columnBValue, out string productName2))
+                        {
+                            ProcessRowold(currentSheet, newSheet, cell, productName2, columnBValue, productNextRow, panelqty, countColumn, i);
+                            
+                        }
+                        else 
                         {
                             Excel.Range dataRow = currentSheet.Rows[cell.Row];
                             string columnAValue = currentSheet.Cells[cell.Row, "A"].Value2?.ToString();
-                            string columnBValue = currentSheet.Cells[cell.Row, "B"].Value2?.ToString();
-                            string columnCValue = currentSheet.Cells[cell.Row, "C"].Value2?.ToString();
-                            string columnDValue = currentSheet.Cells[cell.Row, "D"].Value2?.ToString();
-                            
-
-                            double columnEValue = Convert.ToDouble(currentSheet.Cells[cell.Row, "E"].Value2);
-                            double columnFValue = Convert.ToDouble(currentSheet.Cells[cell.Row, "F"].Value2);
-                            double product = columnEValue * columnFValue;
-
-                            if (productNextRow.TryGetValue(productName, out int targetRow))
-                            {
-                                bool matchFound = false;
-
-                                for (int row = 1; row <= newSheet.UsedRange.Rows.Count; row++)
-                                {
-                                    if (newSheet.Cells[row, "C"].Value2?.ToString() == columnCValue)
-                                    {
-                                        double currentEValue = Convert.ToDouble(newSheet.Cells[row, countColumn + i].Value2);
-                                        newSheet.Cells[row, countColumn + i].Value2 = currentEValue + product;
-                                        
-                                        matchFound = true;
-                                        break;
-                                    }
-                                }
-
-                                if (!matchFound)
-                                {
-                                    newSheet.Rows[targetRow].Insert();
-
-                                    newSheet.Cells[targetRow, "A"].Value2 = columnAValue;
-                                    newSheet.Cells[targetRow, "B"].Value2 = columnBValue;
-                                    newSheet.Cells[targetRow, "C"].Value2 = columnCValue;
-                                    newSheet.Cells[targetRow, "D"].Value2 = columnDValue;
-                                    newSheet.Cells[targetRow, countColumn + i].Value2 = product;
-
-                                    productNextRow[productName] = targetRow + 1;
-
-                                    bool startUpdating = false;
-                                    foreach (var key in productNextRow.Keys.ToList())
-                                    {
-                                        if (startUpdating)
-                                        {
-                                            productNextRow[key]++;
-                                        }
-                                        if (key == productName)
-                                        {
-                                            startUpdating = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        else {
-                            
-                            Excel.Range dataRow = currentSheet.Rows[cell.Row];
-                            string columnAValue = currentSheet.Cells[cell.Row, "A"].Value2?.ToString();
-                            string columnBValue = currentSheet.Cells[cell.Row, "B"].Value2?.ToString();
                             Excel.Range columnBCell = currentSheet.Cells[cell.Row, "B"];
 
                             // The color code for Excel's "Orange" color
                             int orangeColorCode = 49407;
-                            if (columnBValue == "BUSBAR FABRICATION COST" ||  columnBValue == "CONSUMABLES" || columnBValue== "LABOUR WIRING"|| columnBCell.Interior.Color == orangeColorCode)
+                            if (columnBValue == "BUSBAR FABRICATION COST" || columnBValue == "TOTAL" || columnBValue == "CONSUMABLES" || columnBValue == "LABOUR WIRING" || columnBCell.Interior.Color == orangeColorCode)
                             {
                                 continue;
                             }
@@ -1047,8 +1314,8 @@ namespace GaMeR
 
                             double columnEValue = Convert.ToDouble(currentSheet.Cells[cell.Row, "E"].Value2);
                             double columnFValue = Convert.ToDouble(currentSheet.Cells[cell.Row, "F"].Value2);
-                            double product = columnEValue * columnFValue;
-                            if (productNextRow.TryGetValue("NULL", out int targetRow))
+                            double product = columnEValue * columnFValue * panelqty;
+                            if (productNextRow.TryGetValue("NULL", out int targetRow3))
                             {
                                 bool matchFound = false;
 
@@ -1065,85 +1332,196 @@ namespace GaMeR
 
                                 if (!matchFound)
                                 {
-                                    newSheet.Rows[targetRow].Insert();
+                                    newSheet.Rows[targetRow3].Insert();
 
-                                    newSheet.Cells[targetRow, "A"].Value2 = columnAValue;
-                                    newSheet.Cells[targetRow, "B"].Value2 = columnBValue;
-                                    newSheet.Cells[targetRow, "C"].Value2 = columnCValue;
-                                    newSheet.Cells[targetRow, "D"].Value2 = columnDValue;
-                                    newSheet.Cells[targetRow, countColumn + i].Value2 = product;
+                                    newSheet.Cells[targetRow3, "A"].Value2 = columnAValue;
+                                    newSheet.Cells[targetRow3, "B"].Value2 = columnBValue;
+                                    newSheet.Cells[targetRow3, "C"].Value2 = columnCValue;
+                                    newSheet.Cells[targetRow3, "D"].Value2 = columnDValue;
+                                    newSheet.Cells[targetRow3, countColumn + i].Value2 = product;
 
-                                    productNextRow["NULL"] = targetRow + 1;
+                                    productNextRow["NULL"] = targetRow3 + 1;
 
-                                    bool startUpdating = false;
+                                    bool startUpdating3 = false;
                                     foreach (var key in productNextRow.Keys.ToList())
                                     {
-                                        if (startUpdating)
+                                        if (startUpdating3)
                                         {
                                             productNextRow[key]++;
                                         }
                                         if (key == "NULL")
                                         {
-                                            startUpdating = true;
+                                            startUpdating3 = true;
                                         }
                                     }
                                 }
-                             }
-
                             }
-                    }
 
-                    
-                    }
-                
-
-                newSheet.Activate();
-                Excel.Range usedRangeNew = newSheet.UsedRange;
-                Excel.Range columnBNew = usedRangeNew.Columns["B"];
-                int lastColumn = usedRangeNew.Columns.Count - 3;
-                string lastColumnLetter = GetExcelColumnName(lastColumn - 1);
-
-                for (int row = 7; row <= usedRangeNew.Rows.Count; row++)
-                {
-                    Excel.Range formulaCell = newSheet.Cells[row, lastColumn];
-                    string formula = $"=SUM(F{row}:{lastColumnLetter}{row})";
-                    formulaCell.Formula = formula;
-                }
-
-                foreach (Excel.Range cell in columnBNew.Cells)
-                {
-                    if (cell.Interior.Color == 15773696)
-                    {
-                        int rowToDelete = cell.Row + 1;
-
-                        if (rowToDelete <= usedRangeNew.Rows.Count)
-                        {
-                            Excel.Range rowToDeleteRange = newSheet.Rows[rowToDelete];
-                            rowToDeleteRange.Delete();
                         }
+                    } 
+                }
+                    newSheet.Activate();
+                    Excel.Range usedRangeNew = newSheet.UsedRange;
+                    Excel.Range columnBNew = usedRangeNew.Columns["B"];
+                    int lastColumn = usedRangeNew.Columns.Count;
+                    string lastColumnLetter = GetExcelColumnName(lastColumn - 1);
 
-                        newSheet.Cells[cell.Row, lastColumn] = "";
-                        Excel.Range targetCell = newSheet.Cells[cell.Row, lastColumn];
-                        targetCell.Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.LightBlue);
+                    for (int row = 7; row <= usedRangeNew.Rows.Count; row++)
+                    {
+                        Excel.Range formulaCell = newSheet.Cells[row, lastColumn];
+                        string formula = $"=SUM(F{row}:{lastColumnLetter}{row})";
+                        formulaCell.Formula = formula;
                     }
-                }
 
-                for (int col = 6; col <= lastColumn; col++)
-                {
-                    Excel.Range columnRange = usedRangeNew.Columns[col];
+                    foreach (Excel.Range cell in columnBNew.Cells)
+                    {
+                        if (cell.Interior.Color == 15773696)
+                        {
+                            int rowToDelete = cell.Row + 1;
 
-                    // Set font to bold
-                    columnRange.Font.Bold = true;
+                            if (rowToDelete <= usedRangeNew.Rows.Count)
+                            {
+                                Excel.Range rowToDeleteRange = newSheet.Rows[rowToDelete];
+                                rowToDeleteRange.Delete();
+                            }
 
-                    // Set text to center
-                    columnRange.HorizontalAlignment = Excel.XlHAlign.xlHAlignCenter;
-                }
+                            newSheet.Cells[cell.Row, lastColumn] = "";
+                            Excel.Range targetCell = newSheet.Cells[cell.Row, lastColumn];
+                            targetCell.Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.LightBlue);
+                        }
+                    }
+
+                    for (int col = 6; col <= lastColumn; col++)
+                    {
+                        Excel.Range columnRange = usedRangeNew.Columns[col];
+
+                        // Set font to bold
+                        columnRange.Font.Bold = true;
+
+                        // Set text to center
+                        columnRange.HorizontalAlignment = Excel.XlHAlign.xlHAlignCenter;
+                    }
+
+                int rowtostart = productNextRow["CT"];
+                //MessageBox.Show(rowtostart.ToString());
+                OrganizeDataByMake(newSheet, rowtostart);
 
 
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error: {ex.Message}");
+            }
+        }
+
+        void ProcessRowold(
+            Excel.Worksheet currentSheet, Excel.Worksheet newSheet, Excel.Range cell,
+            string productName, string comparisonValue,
+            Dictionary<string, int> productNextRow, double panelqty, int countColumn, int i)
+        {
+            Excel.Range dataRow = currentSheet.Rows[cell.Row];
+            string columnAValue = currentSheet.Cells[cell.Row, "A"].Value2?.ToString();
+            string columnBValue = currentSheet.Cells[cell.Row, "B"].Value2?.ToString();
+            string columnCValue = currentSheet.Cells[cell.Row, "C"].Value2?.ToString();
+            string columnDValue = currentSheet.Cells[cell.Row, "D"].Value2?.ToString();
+
+            double columnEValue = Convert.ToDouble(currentSheet.Cells[cell.Row, "E"].Value2);
+            double columnFValue = Convert.ToDouble(currentSheet.Cells[cell.Row, "F"].Value2);
+            double product = columnEValue * columnFValue * panelqty;
+
+            if (productNextRow.TryGetValue(productName, out int targetRow))
+            {
+                bool matchFound = false;
+
+                for (int row = 1; row <= newSheet.UsedRange.Rows.Count; row++)
+                {
+                    // Match based on productName (either column C or column B value)
+                    if (newSheet.Cells[row, "B"].Value2?.ToString() == columnBValue)
+                    {
+                        double currentEValue = Convert.ToDouble(newSheet.Cells[row, countColumn + i].Value2);
+                        newSheet.Cells[row, countColumn + i].Value2 = currentEValue + product;
+
+                        matchFound = true;
+                        break;
+                    }
+                }
+
+                if (!matchFound)
+                {
+                    newSheet.Rows[targetRow].Insert();
+
+                    newSheet.Cells[targetRow, "A"].Value2 = columnAValue;
+                    newSheet.Cells[targetRow, "B"].Value2 = columnBValue;
+                    newSheet.Cells[targetRow, "C"].Value2 = columnCValue;
+                    newSheet.Cells[targetRow, "D"].Value2 = columnDValue;
+                    newSheet.Cells[targetRow, countColumn + i].Value2 = product;
+
+                    productNextRow[productName] = targetRow + 1;
+
+                    bool startUpdating = false;
+                    foreach (var key in productNextRow.Keys.ToList())
+                    {
+                        if (startUpdating)
+                        {
+                            productNextRow[key]++;
+                        }
+                        if (key == productName)
+                        {
+                            startUpdating = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        void ProcessRownew(string productName, Excel.Range cell, Excel.Worksheet currentSheet, Excel.Worksheet newSheet, int countColumn, ref Dictionary<string, int> productNextRow, int i)
+        {
+            string columnAValue = currentSheet.Cells[cell.Row, "A"].Value2?.ToString();
+            string columnBValue = currentSheet.Cells[cell.Row, "B"].Value2?.ToString();
+            string columnCValue = currentSheet.Cells[cell.Row, "C"].Value2?.ToString();
+            string columnDValue = currentSheet.Cells[cell.Row, "D"].Value2?.ToString();
+            double product = Convert.ToDouble(currentSheet.Cells[cell.Row, "L"].Value2);
+
+            if (productNextRow.TryGetValue(productName, out int targetRow))
+            {
+                bool matchFound = false;
+
+                for (int row = 1; row <= newSheet.UsedRange.Rows.Count; row++)
+                {
+                    if (newSheet.Cells[row, "B"].Value2?.ToString() == columnBValue)
+                    {
+                        double currentEValue = Convert.ToDouble(newSheet.Cells[row, countColumn + i].Value2);
+                        newSheet.Cells[row, countColumn + i].Value2 = currentEValue + product;
+                        matchFound = true;
+                        break;
+                    }
+                }
+
+                if (!matchFound)
+                {
+                    newSheet.Rows[targetRow].Insert();
+
+                    newSheet.Cells[targetRow, "A"].Value2 = columnAValue;
+                    newSheet.Cells[targetRow, "B"].Value2 = currentSheet.Cells[cell.Row, "B"].Value2?.ToString();
+                    newSheet.Cells[targetRow, "C"].Value2 = columnCValue;
+                    newSheet.Cells[targetRow, "D"].Value2 = columnDValue;
+                    newSheet.Cells[targetRow, countColumn + i].Value2 = product;
+
+                    productNextRow[productName] = targetRow + 1;
+
+                    bool startUpdating = false;
+                    foreach (var key in productNextRow.Keys.ToList())
+                    {
+                        if (startUpdating)
+                        {
+                            productNextRow[key]++;
+                        }
+                        if (key == productName)
+                        {
+                            startUpdating = true;
+                        }
+                    }
+                }
             }
         }
 
@@ -1175,11 +1553,25 @@ namespace GaMeR
                 );
 
                 Dictionary<string, string> catalogNumberToSheetMap = new Dictionary<string, string>();
+                Dictionary<string, string> descToSheetMap = new Dictionary<string, string>();
 
                 foreach (Excel.Worksheet sheet in extWorkbook2.Sheets)
                 {
                     Excel.Range usedRange1 = sheet.UsedRange;
+                    Excel.Range columnA1 = usedRange1.Columns["A"];
                     Excel.Range columnB1 = usedRange1.Columns["B"];
+
+                    foreach (Excel.Range cell in columnA1.Cells)
+                    {
+                        if (cell.Value2 != null)
+                        {
+                            string description = cell.Value2.ToString();
+                            if (!descToSheetMap.ContainsKey(description))
+                            {
+                                descToSheetMap[description] = sheet.Name;
+                            }
+                        }
+                    }
 
                     foreach (Excel.Range cell in columnB1.Cells)
                     {
@@ -1219,6 +1611,16 @@ namespace GaMeR
                     MessageBox.Show("The 'temp' sheet was not found in the template_bom.xlsx file.");
                     extWorkbook.Close(false);
                     return;
+                }
+
+                foreach (Excel.Worksheet sheet in currentWorkbook.Sheets)
+                {
+                    if (sheet.Visible == Excel.XlSheetVisibility.xlSheetHidden)
+                    {
+                        MessageBox.Show($"Sheet '{sheet.Name}' is hidden.plz run after unhiding all sheets");
+                        extWorkbook.Close(false);
+                        return;
+                    }
                 }
 
                 tempSheet.Copy(After: currentWorkbook.Sheets[currentWorkbook.Sheets.Count]);
@@ -1262,8 +1664,9 @@ namespace GaMeR
                             { "LAMP", 16 },
                             { "REA-CAP", 18 },
                             { "CONTACTOR", 20 },
-                            { "CT", 22 },
-                            { "NULL", 31 }
+                            { "TB", 22 },
+                            { "CT", 24 },
+                            { "NULL", 33 }
                         };
 
                 List<Excel.Range> headings = new List<Excel.Range>();
@@ -1316,71 +1719,25 @@ namespace GaMeR
                     foreach (Excel.Range cell in columnCDataRange)
                     {
                         string catNumber = cell.Value2?.ToString();
+                        string columnBValue = currentSheet.Cells[cell.Row, "B"].Value2?.ToString();
                         if (catNumber != null && catalogNumberToSheetMap.TryGetValue(catNumber, out string productName))
                         {
-                            Excel.Range dataRow = currentSheet.Rows[cell.Row];
-                            string columnAValue = currentSheet.Cells[cell.Row, "A"].Value2?.ToString();
-                            string columnBValue = currentSheet.Cells[cell.Row, "B"].Value2?.ToString();
-                            string columnCValue = currentSheet.Cells[cell.Row, "C"].Value2?.ToString();
-                            string columnDValue = currentSheet.Cells[cell.Row, "D"].Value2?.ToString();
-
-                            //double columnEValue = Convert.ToDouble(currentSheet.Cells[cell.Row, "E"].Value2);
-                           //double columnFValue = Convert.ToDouble(currentSheet.Cells[cell.Row, "F"].Value2);
-                            double product = Convert.ToDouble(currentSheet.Cells[cell.Row, "L"].Value2);
-
-                            if (productNextRow.TryGetValue(productName, out int targetRow))
-                            {
-                                bool matchFound = false;
-
-                                for (int row = 1; row <= newSheet.UsedRange.Rows.Count; row++)
-                                {
-                                    if (newSheet.Cells[row, "C"].Value2?.ToString() == columnCValue)
-                                    {
-                                        double currentEValue = Convert.ToDouble(newSheet.Cells[row, countColumn + i].Value2);
-                                        newSheet.Cells[row, countColumn + i].Value2 = currentEValue + product;
-                                        matchFound = true;
-                                        break;
-                                    }
-                                }
-
-                                if (!matchFound)
-                                {
-                                    newSheet.Rows[targetRow].Insert();
-
-                                    newSheet.Cells[targetRow, "A"].Value2 = columnAValue;
-                                    newSheet.Cells[targetRow, "B"].Value2 = columnBValue;
-                                    newSheet.Cells[targetRow, "C"].Value2 = columnCValue;
-                                    newSheet.Cells[targetRow, "D"].Value2 = columnDValue;
-                                    newSheet.Cells[targetRow, countColumn + i].Value2 = product;
-
-                                    productNextRow[productName] = targetRow + 1;
-
-                                    bool startUpdating = false;
-                                    foreach (var key in productNextRow.Keys.ToList())
-                                    {
-                                        if (startUpdating)
-                                        {
-                                            productNextRow[key]++;
-                                        }
-                                        if (key == productName)
-                                        {
-                                            startUpdating = true;
-                                        }
-                                    }
-                                }
-                            }
+                            ProcessRownew(productName, cell, currentSheet, newSheet, countColumn, ref productNextRow, i);
+                        }
+                        else if (columnBValue != null && descToSheetMap.TryGetValue(columnBValue, out string productName2))
+                        {
+                            ProcessRownew(productName2, cell, currentSheet, newSheet, countColumn, ref productNextRow, i);
                         }
                         else
                         {
 
                             Excel.Range dataRow = currentSheet.Rows[cell.Row];
                             string columnAValue = currentSheet.Cells[cell.Row, "A"].Value2?.ToString();
-                            string columnBValue = currentSheet.Cells[cell.Row, "B"].Value2?.ToString();
                             Excel.Range columnBCell = currentSheet.Cells[cell.Row, "B"];
 
                             // The color code for Excel's "Orange" color
                             int orangeColorCode = 49407;
-                            if (columnBValue == "BUSBAR FABRICATION COST" || columnBValue == "CONSUMABLES" || columnBValue == "LABOUR WIRING" || columnBCell.Interior.Color == orangeColorCode)
+                            if (columnBValue == "BUSBAR FABRICATION COST" || columnBValue == "CONSUMABLES" || columnBValue == "TOTAL" || columnBValue == "LABOUR WIRING" || columnBCell.Interior.Color == orangeColorCode)
                             {
                                 continue;
                             }
@@ -1391,8 +1748,6 @@ namespace GaMeR
                                 continue;
                             }
 
-                            //double columnEValue = Convert.ToDouble(currentSheet.Cells[cell.Row, "E"].Value2);
-                            //double columnFValue = Convert.ToDouble(currentSheet.Cells[cell.Row, "F"].Value2);
                             double product = Convert.ToDouble(currentSheet.Cells[cell.Row, "L"].Value2);
                             if (productNextRow.TryGetValue("NULL", out int targetRow))
                             {
@@ -1482,6 +1837,11 @@ namespace GaMeR
                     columnRange.HorizontalAlignment = Excel.XlHAlign.xlHAlignCenter;
                 }
 
+                int rowtostart = productNextRow["CT"];
+                //MessageBox.Show(rowtostart.ToString());
+                OrganizeDataByMake(newSheet, rowtostart);
+
+
 
             }
             catch (Exception ex)
@@ -1518,11 +1878,25 @@ namespace GaMeR
                 );
 
                 Dictionary<string, string> catalogNumberToSheetMap = new Dictionary<string, string>();
+                Dictionary<string, string> descToSheetMap = new Dictionary<string, string>();
 
                 foreach (Excel.Worksheet sheet in extWorkbook2.Sheets)
                 {
                     Excel.Range usedRange1 = sheet.UsedRange;
+                    Excel.Range columnA1 = usedRange1.Columns["A"];
                     Excel.Range columnB1 = usedRange1.Columns["B"];
+
+                    foreach (Excel.Range cell in columnA1.Cells)
+                    {
+                        if (cell.Value2 != null)
+                        {
+                            string description = cell.Value2.ToString();
+                            if (!descToSheetMap.ContainsKey(description))
+                            {
+                                descToSheetMap[description] = sheet.Name;
+                            }
+                        }
+                    }
 
                     foreach (Excel.Range cell in columnB1.Cells)
                     {
@@ -1605,8 +1979,9 @@ namespace GaMeR
                             { "LAMP", 68 },
                             { "REA-CAP", 70 },
                             { "CONTACTOR", 72 },
-                            { "CT", 74 },
-                            { "NULL", 83 }
+                            { "TB", 74 },
+                            { "CT", 76 },
+                            { "NULL", 85 }
                         };
 
                 List<Excel.Range> headings = new List<Excel.Range>();
@@ -1659,25 +2034,16 @@ namespace GaMeR
                     foreach (Excel.Range cell in columnCDataRange)
                     {
                         string catNumber = cell.Value2?.ToString();
+                        string columnBValue = currentSheet.Cells[cell.Row, "B"].Value2?.ToString();
                         if (catNumber != null && catalogNumberToSheetMap.TryGetValue(catNumber, out string productName))
                         {
+
                             Excel.Range dataRow = currentSheet.Rows[cell.Row];
                             string columnAValue = currentSheet.Cells[cell.Row, "A"].Value2?.ToString();
-                            string columnBValue = currentSheet.Cells[cell.Row, "B"].Value2?.ToString();
                             string columnCValue = currentSheet.Cells[cell.Row, "C"].Value2?.ToString();
                             string columnDValue = currentSheet.Cells[cell.Row, "D"].Value2?.ToString();
                             string make = currentSheet.Cells[cell.Row, "D"].Value2?.ToString();
                             string disc = currentSheet.Cells[cell.Row, "G"].Formula;
-
-                            //if (make == "ALUMINIUM" || make == null || make == "" || make == "KCIPL")
-                            //{
-                                //continue;
-
-                            //}
-                            //else if (make.Contains("L&T"))
-                            //{
-                                //make = "L&T";
-                            //}
 
                             double price = Convert.ToDouble(currentSheet.Cells[cell.Row, "F"].Value2);
                             double product = Convert.ToDouble(currentSheet.Cells[cell.Row, "L"].Value2);
@@ -1688,7 +2054,7 @@ namespace GaMeR
 
                                 for (int row = 1; row <= newSheet.UsedRange.Rows.Count; row++)
                                 {
-                                    if (newSheet.Cells[row, "C"].Value2?.ToString() == columnCValue)
+                                    if (newSheet.Cells[row, "B"].Value2?.ToString() == columnBValue)
                                     {
                                         double currentEValue = Convert.ToDouble(newSheet.Cells[row, countColumn + i].Value2);
                                         newSheet.Cells[row, countColumn + i].Value2 = currentEValue + product;
@@ -1727,15 +2093,70 @@ namespace GaMeR
                                 }
                             }
                         }
+                        else if (columnBValue != null && descToSheetMap.TryGetValue(columnBValue, out string productName2))
+                        {
+                            Excel.Range dataRow = currentSheet.Rows[cell.Row];
+                            string columnAValue = currentSheet.Cells[cell.Row, "A"].Value2?.ToString();
+                            string columnCValue = currentSheet.Cells[cell.Row, "C"].Value2?.ToString();
+                            string columnDValue = currentSheet.Cells[cell.Row, "D"].Value2?.ToString();
+                            string make = currentSheet.Cells[cell.Row, "D"].Value2?.ToString();
+                            string disc = currentSheet.Cells[cell.Row, "G"].Formula;
+
+                            double price = Convert.ToDouble(currentSheet.Cells[cell.Row, "F"].Value2);
+                            double product = Convert.ToDouble(currentSheet.Cells[cell.Row, "L"].Value2);
+
+                            if (productNextRow.TryGetValue(productName2, out int targetRow))
+                            {
+                                bool matchFound = false;
+
+                                for (int row = 1; row <= newSheet.UsedRange.Rows.Count; row++)
+                                {
+                                    if (newSheet.Cells[row, "B"].Value2?.ToString() == columnBValue)
+                                    {
+                                        double currentEValue = Convert.ToDouble(newSheet.Cells[row, countColumn + i].Value2);
+                                        newSheet.Cells[row, countColumn + i].Value2 = currentEValue + product;
+                                        matchFound = true;
+                                        break;
+                                    }
+                                }
+
+                                if (!matchFound)
+                                {
+                                    newSheet.Rows[targetRow].Insert();
+
+                                    newSheet.Cells[targetRow, "A"].Value2 = columnAValue;
+                                    newSheet.Cells[targetRow, "B"].Value2 = columnBValue;
+                                    newSheet.Cells[targetRow, "C"].Value2 = columnCValue;
+                                    newSheet.Cells[targetRow, "D"].Value2 = columnDValue;
+                                    newSheet.Cells[targetRow, countColumn + i].Value2 = product;
+                                    newSheet.Cells[targetRow, countColumn + i + 2].Value2 = price.ToString();
+                                    newSheet.Cells[targetRow, countColumn + i + 4].Formula = disc;
+                                    newSheet.Cells[targetRow, countColumn + i + 6].Value2 = make;
+
+                                    productNextRow[productName2] = targetRow + 1;
+
+                                    bool startUpdating = false;
+                                    foreach (var key in productNextRow.Keys.ToList())
+                                    {
+                                        if (startUpdating)
+                                        {
+                                            productNextRow[key]++;
+                                        }
+                                        if (key == productName2)
+                                        {
+                                            startUpdating = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         else
                         {
 
                             Excel.Range dataRow = currentSheet.Rows[cell.Row];
                             string columnAValue = currentSheet.Cells[cell.Row, "A"].Value2?.ToString();
-                            string columnBValue = currentSheet.Cells[cell.Row, "B"].Value2?.ToString();
                             Excel.Range columnBCell = currentSheet.Cells[cell.Row, "B"];
-
-                            // The color code for Excel's "Orange" color
+                           
                             int orangeColorCode = 49407;
                             if (columnBValue == "BUSBAR FABRICATION COST" || columnBValue == "CONSUMABLES" || columnBValue == "LABOUR WIRING" || columnBCell.Interior.Color == orangeColorCode)
                             {
@@ -1857,12 +2278,135 @@ namespace GaMeR
                     columnRange.HorizontalAlignment = Excel.XlHAlign.xlHAlignCenter;
                 }
 
+                int rowtostart = productNextRow["CT"];
+                //MessageBox.Show(rowtostart.ToString());
+                OrganizeDataByMake(newSheet, rowtostart);
+
+                Dictionary<string, double> makePriceTotals = new Dictionary<string, double>();
+                Dictionary<string, string> makedisc = new Dictionary<string, string>();
+                Excel.Range lastcolumn2 = newSheet.UsedRange.Columns[usedRangeNew.Columns.Count];
+                int rowtopaste = newSheet.UsedRange.Rows.Count+3;
+                foreach (Excel.Range cell in lastcolumn2.Cells)
+                {
+                    string makeName = cell.Value2?.ToString() ?? "";
+
+                    string priceString = cell.Offset[0, -1].Value2?.ToString().Trim() ?? "";
+                    string discString = cell.Offset[0, -2].Formula ?? "";
+                    double price;
+
+                    // Safely try to parse the price
+                    if (double.TryParse(priceString, out price))
+                    {
+                        // If the make name is not empty, accumulate the price in the dictionary
+                        if (!string.IsNullOrEmpty(makeName))
+                        {
+                            // Check if the make name already exists in the dictionary
+                            if (makePriceTotals.ContainsKey(makeName))
+                            {
+                                // Add the price to the existing total
+                                makePriceTotals[makeName] += price;
+                            }
+                            else
+                            {
+                                // Add a new entry for the make name with the initial price
+                                makePriceTotals[makeName] = price;
+                                makedisc[makeName] = discString;
+                            }
+                        }
+                    }
+                }
+                Excel.Range makeCellhead = usedRangeNew.Worksheet.Cells[rowtopaste -1, 2];
+                makeCellhead.Value2 = "MAKES";
+                makeCellhead.Font.Bold = true;
+                makeCellhead.Interior.Color = 49407;
+                ApplyBorders(makeCellhead);
+                Excel.Range discCellhead = usedRangeNew.Worksheet.Cells[rowtopaste - 1, 3];
+                discCellhead.Value2 = "DISCOUNT";
+                discCellhead.Font.Bold = true;
+                discCellhead.Interior.Color = 49407;
+                ApplyBorders(discCellhead);
+                Excel.Range priceCellhead = usedRangeNew.Worksheet.Cells[rowtopaste -1, 4];
+                priceCellhead.Value2 = "TOTAL PRICE";
+                priceCellhead.Font.Bold = true;
+                priceCellhead.Interior.Color = 49407;
+                ApplyBorders(priceCellhead);
+
+                var sortedMakePriceTotals = makePriceTotals.OrderByDescending(entry => entry.Value);
+
+                foreach (var makeEntry in sortedMakePriceTotals)
+                {
+                    string make = makeEntry.Key;
+                    double totalPrice = makeEntry.Value;
+
+                    // Paste the make name and total price in a neat table
+                    Excel.Range makeCell = usedRangeNew.Worksheet.Cells[rowtopaste, 2]; 
+                    makeCell.Value2 = make;
+                    makeCell.Font.Bold = true;
+
+                    Excel.Range discCell = usedRangeNew.Worksheet.Cells[rowtopaste, 3];
+                    discCell.Formula = makedisc[make];
+                    discCell.Font.Bold = true;
+                    discCell.NumberFormat = "0%";
+
+                    Excel.Range priceCell = usedRangeNew.Worksheet.Cells[rowtopaste, 4]; 
+                    priceCell.Value2 = totalPrice;
+                    priceCell.Font.Bold = true;
+                    priceCell.NumberFormat = "0";
+
+
+                    rowtopaste++; 
+                }
 
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error: {ex.Message}");
             }
+        }
+        private void OrganizeDataByMake(Excel.Worksheet sheet, int rowstart)
+        {
+            Dictionary<string, List<Excel.Range>> makeRows = new Dictionary<string, List<Excel.Range>>();
+            Excel.Range usedRange = sheet.UsedRange;
+
+            int lastRow = usedRange.Rows.Count;
+
+            for (int rowIndex = rowstart; rowIndex <= lastRow; rowIndex++) // Assuming data starts from row 2
+            {
+                Excel.Range row = sheet.Rows[rowIndex];
+                string make = row.Cells[1, 4].Value2?.ToString() ?? ""; // Assuming make is in column C
+
+                if (!makeRows.ContainsKey(make))
+                {
+                    makeRows[make] = new List<Excel.Range>();
+                }
+
+                makeRows[make].Add(row);
+            }
+
+            if (makeRows.Count == 0)
+            {
+                return;
+            }
+
+            // Reinsert data grouped by make
+            int currentRow = lastRow + 2; // Start from the first row
+
+            foreach (var make in makeRows.Keys)
+            {
+                foreach (var row in makeRows[make])
+                {
+                    row.Copy(sheet.Rows[currentRow]);
+                    currentRow++;
+                }
+                // Add a blank row between different makes
+                //currentRow++;
+            }
+            if (lastRow > rowstart) // Avoid deleting all rows if there's no data
+            {
+                Excel.Range rowsToDelete = sheet.Rows[$"{rowstart}:{(lastRow + 1)}"];
+                rowsToDelete.Delete();
+            }
+
         }
         private string GetExcelColumnName(int columnNumber)
         {
